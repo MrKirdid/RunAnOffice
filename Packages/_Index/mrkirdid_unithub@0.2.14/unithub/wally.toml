@@ -1,0 +1,23 @@
+[package]
+name = "mrkirdid/unithub"
+description = "Typed service/controller lifecycle bootstrapper with stable proxies, replicated client manifests, and bounded preload."
+version = "0.2.14"
+license = "MIT"
+authors = ["mrkirdid"]
+registry = "https://github.com/UpliftGames/wally-index"
+realm = "shared"
+exclude = ["**"]
+include = [
+	"src",
+	"src/**",
+	"wally.toml",
+	"wally.lock",
+	"default.project.json",
+	"LICENSE",
+	"README.md",
+]
+
+[dependencies]
+Janitor = "howmanysmall/janitor@^1.18.3"
+Promise = "evaera/promise@^4.0.0"
+Signal = "lucasmzreal/fastsignal@^10.4.0"

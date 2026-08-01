@@ -1,0 +1,48 @@
+--https://1axen.github.io/blink
+
+option ClientOutput = "src/Shared/Networking/networkingClient.luau"
+option ServerOutput = "src/Shared/Networking/networkingServer.luau"
+option TypesOutput = "src/Shared/Networking/networkingTypes.luau"
+
+option PromiseLibrary = "ReplicatedStorage.Shared.Packages.TypedPromise"
+option Casing = Pascal
+
+type Player = Instance(Player)
+
+function Roll {
+	Yield: Promise,
+	Return: struct {
+		Player: Player,
+		-- [slot 0-16]: the part rolled into that slot
+		Results: map { [u8(0..16)]: struct {
+			Variant: string(1..20),
+			Component: string(1..20)
+		} }
+	}
+}
+
+scope Plot {
+	function GetPlots {
+		Yield: Promise,
+		Return: map { [Player]: u8(0..8) }
+	}
+
+	event UpdatePlots {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: map { [Player]: u8(0..8) }
+	}
+}
+
+scope Stealing {
+
+}
+
+scope Purchases {
+
+}
+
+scope NPCs {
+
+}

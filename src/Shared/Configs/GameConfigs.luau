@@ -1,0 +1,3 @@
+return {
+	PlotAmount = 8,
+}
