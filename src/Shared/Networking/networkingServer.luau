@@ -165,8 +165,13 @@ local SerdesThread: thread?
 Queue.Reliable[0] = table.create(256)
 Queue.Reliable[1] = table.create(256)
 export type Player = Player
-function SerdesFunctions.ReadFUNCTION_DATA_Roll(): (nil)
-	return nil
+function SerdesFunctions.ReadFUNCTION_DATA_Roll(): (number)
+	-- Read BLOCK: 1 bytes
+	local BLOCK_START = Read(1)
+	local Value = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Value < 1 then error(`Expected "Value" to be larger than 1, got {Value} instead.`) end
+	if Value > 17 then error(`Expected "Value" to be smaller than 17, got {Value} instead.`) end
+	return Value
 end
 
 function SerdesFunctions.WriteFUNCTION_RETURN_Roll(Value: { Player: Player, Results: {[number]: { Variant: string, Component: string }} }, InvocationIdentifier: number): ()
@@ -318,7 +323,7 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 			-- Read BLOCK: 1 bytes
 			local BLOCK_START = Read(1)
 			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-			local Value: nil = SerdesFunctions.ReadFUNCTION_DATA_Roll()
+			local Value: number = SerdesFunctions.ReadFUNCTION_DATA_Roll()
 			if Events.Reliable[0] ~= nil then
 				task.spawn(Events.Reliable[0], Player, Value, InvocationIdentifier)
 			else
@@ -366,8 +371,8 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	Roll = {
-		On = function(Listener: (Player, nil) -> ({ Player: Player, Results: {[number]: { Variant: string, Component: string }} })): ()
-			Events.Reliable[0] = function(Player: Player, Value: nil, InvocationIdentifier: number): ()
+		On = function(Listener: (Player, number) -> ({ Player: Player, Results: {[number]: { Variant: string, Component: string }} })): ()
+			Events.Reliable[0] = function(Player: Player, Value: number, InvocationIdentifier: number): ()
 				local ReturnValue: { Player: Player, Results: {[number]: { Variant: string, Component: string }} };
 				local Success, Error = pcall(function ()
 					ReturnValue = Listener(Player, Value)

@@ -165,11 +165,12 @@ Queue.Reliable[0] = table.create(256)
 Queue.Reliable[1] = table.create(256)
 Queue.Reliable[2] = table.create(256)
 export type Player = Player
-function SerdesFunctions.WriteFUNCTION_DATA_Roll(Value: nil, InvocationIdentifier: number): ()
-	-- Allocate BLOCK: 2 bytes
-	local BLOCK_START = Allocate(2)
+function SerdesFunctions.WriteFUNCTION_DATA_Roll(Value: number, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value)
 end
 
 function SerdesFunctions.ReadFUNCTION_RETURN_Roll(): ({ Player: Player, Results: {[number]: { Variant: string, Component: string }} })
@@ -376,7 +377,7 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	Roll = {
-		Invoke = function(Value: nil)
+		Invoke = function(Value: number)
 			return Promise.new(function (Resolve, Reject, OnCancel)
 				local InvocationIdentifier = Invoke()
 				if Calls[InvocationIdentifier] ~= nil then

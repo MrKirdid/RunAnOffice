@@ -11,6 +11,8 @@ type Player = Instance(Player)
 
 function Roll {
 	Yield: Promise,
+	-- how many rolls the client thinks it's making, the server checks it against RollsUnlocked
+	Data: u8(1..17),
 	Return: struct {
 		Player: Player,
 		-- [slot 0-16]: the part rolled into that slot

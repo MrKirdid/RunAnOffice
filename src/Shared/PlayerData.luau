@@ -16,9 +16,9 @@ local Config = {
 		Cash = 200, -- Starting amount, subject to change but I think it should be enough for tutorial
 		Rebirths = 0,
 
-		RerollPads = 1,
+		RerollPads = 9,
 
-		Employees = {} :: { [number]: { deskId: number, EmployeeType: string } },
+		Employees = {} :: { [number]: { desk: { Floor: number, Desk: number }, EmployeeType: string } },
 
 		Floors = {
 			[1] = {
@@ -49,7 +49,7 @@ local Config = {
 
 	--- -- --- -- --- -- ---
 
-	UseMock = false,
+	UseMock = true,
 	ViewUserId = nil,
 	DontSave = false,
 }
