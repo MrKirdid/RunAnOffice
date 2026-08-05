@@ -6,9 +6,10 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Assets = ReplicatedStorage:WaitForChild("Assets")
 
-local networkingClient = require(Shared.Networking.networkingClient)
+local NetworkingClient = require(Shared.Networking.networkingClient)
 local PlotController = require(Shared.Controllers.PlotController)
 local Rolling = require(Shared.Utilities.Rolling)
+local Offsets = require(Shared.Configs.Offsets)
 local PlayerData = require(Shared.PlayerData).client
 local Parts = require(Assets.Parts)
 
@@ -20,10 +21,10 @@ local RollingService = {}
 function RollingService:Roll(Positions: { [number]: CFrame? }?)
 	local Count = if Positions then #Positions else PlayerData.RerollPads()
 
-	return networkingClient.Roll.Invoke(Count):expect()
+	return NetworkingClient.Roll.Invoke(Count):expect()
 end
 
-function RollingService:_roll_vizual(Info: {
+function RollingService:_RollVizual(Info: {
 	[number]: {
 		CFrame: CFrame,
 		Final: {
@@ -44,16 +45,15 @@ function RollingService:_roll_vizual(Info: {
 	HighlightEffect.OutlineTransparency = 0
 	HighlightEffect.DepthMode = Enum.HighlightDepthMode.Occluded
 
-	-- Hardcoed for now, will be changed later (amount=speed_upgrade/something idk)
-	local amount = 20
-	local levitate = 2
-	local opening = 0.245
-	local fastest = 0.028
-	local fade = 0.25
+	-- Hardcoed for now, will be changed later (Amount=speed_upgrade/something idk)
+	local Amount = 20
+	local Opening = 0.245
+	local Fastest = 0.028
+	local Fade = 0.25
 
 	local Camera = workspace.CurrentCamera
-	local fov = Camera.FieldOfView
-	local zoom = 45
+	local Fov = Camera.FieldOfView
+	local Zoom = 45
 
 	local TickSound = SFX.Tick:Clone()
 	TickSound.Parent = NewContainer
@@ -61,50 +61,51 @@ function RollingService:_roll_vizual(Info: {
 	local RewardSound = SFX.Reward:Clone()
 	RewardSound.Parent = NewContainer
 
-	for RollIndex = 1, amount do
-		local Alpha = RollIndex / amount
+	for RollIndex = 1, Amount do
+		local Alpha = RollIndex / Amount
 
-		local insts = {}
+		local Insts = {}
 		for _, Data in Info do
-			local NewRollData = Rolling.RollOne()
-			local Model: Model = RollIndex < amount and Parts(NewRollData.Component, NewRollData.Variant)
-				or Parts(Data.Final.Component, Data.Final.Variant)
+			--> Blur through variants of this slot's own component, so a monitor slot
+			--> never flashes a keyboard on its way to the result.
+			local Variant = if RollIndex < Amount then Rolling.RollVariant() else Data.Final.Variant
+			local Model: Model = Parts(Data.Final.Component, Variant)
 
-			Model.WorldPivot = Model:GetPivot():ToWorldSpace() * CFrame.new(0, -Model:GetExtentsSize().Y / 2, 0)
-			Model:PivotTo(Data.CFrame + Vector3.new(0, levitate, 0))
+			--> Placed on the model's own pivot, which is what the offsets are measured against
+			Model:PivotTo(Data.CFrame)
 			Model:ScaleTo(0.01)
 			Model.Parent = NewContainer
-			table.insert(insts, Model)
+			table.insert(Insts, Model)
 		end
 
 		TickSound.TimePosition = 0
 		TickSound:Play()
 
-		local Duration = opening * (fastest / opening) ^ Alpha
+		local Duration = Opening * (Fastest / Opening) ^ Alpha
 
 		local Connection, StartedAt = nil, os.clock()
 		Connection = RunService.RenderStepped:Connect(function()
 			if StartedAt + Duration < os.clock() then
 				Connection:Disconnect()
 				Connection = nil
-				if RollIndex < amount then
-					for _, Model in insts do
+				if RollIndex < Amount then
+					for _, Model in Insts do
 						Model:Destroy()
 					end
 				else
-					for _, Model in insts do
+					for _, Model in Insts do
 						Model:ScaleTo(1)
 					end
 				end
 				return
 			else
 				local ConnectionAlpha = (os.clock() - StartedAt) / Duration
-				for _, Model in insts do
+				for _, Model in Insts do
 					Model:ScaleTo(math.max(0.01, math.sin(ConnectionAlpha * (math.pi / 2))))
 				end
 
-				local Progress = (RollIndex - 1 + ConnectionAlpha) / amount
-				Camera.FieldOfView = fov + (zoom - fov) * math.sin(Progress * (math.pi / 2))
+				local Progress = (RollIndex - 1 + ConnectionAlpha) / Amount
+				Camera.FieldOfView = Fov + (Zoom - Fov) * math.sin(Progress * (math.pi / 2))
 			end
 		end)
 
@@ -132,35 +133,65 @@ function RollingService:_roll_vizual(Info: {
 
 	local FadeStartedAt = os.clock()
 	repeat
-		local FadeAlpha = math.min((os.clock() - FadeStartedAt) / fade, 1)
+		local FadeAlpha = math.min((os.clock() - FadeStartedAt) / Fade, 1)
 		local Transparency = math.sin(FadeAlpha * (math.pi / 2))
 
 		HighlightEffect.FillTransparency = Transparency
 		HighlightEffect.OutlineTransparency = Transparency
-		Camera.FieldOfView = zoom + (fov - zoom) * Transparency
+		Camera.FieldOfView = Zoom + (Fov - Zoom) * Transparency
 		RunService.RenderStepped:Wait()
 	until FadeAlpha >= 1
 
 	return NewContainer
 end
 
+--> One entry per component, placed by its offset from the anchor's pivot. Shared by the
+--> desk roll and the pad roll so both land the three parts in the same relative layout.
+function RollingService:GetDeskVisualData(Anchor: CFrame, Desk: Rolling.Desk)
+	local VisualData = {}
+
+	for Component, Offset in Offsets.Desk do
+		table.insert(VisualData, {
+			CFrame = Anchor * Offset,
+			Final = { Component = Component, Variant = Desk[Component] },
+		})
+	end
+
+	return VisualData
+end
+
+--> Rolls a desk's three components onto the desk itself, then hands back the container
+--> so the caller can swap it for permanent parts.
+function RollingService:RollDesk(DeskModel: Model, Desk: Rolling.Desk)
+	return self:_RollVizual(self:GetDeskVisualData(DeskModel:GetPivot(), Desk))
+end
+
 function RollingService:RollSlots()
+	local Levitate = 2
 	local SlotsUnlocked = PlayerData.RerollPads()
 	local _PlotIndex, Plot = PlotController:GetPlot(Players.LocalPlayer)
 	local RollResults = RollingService:Roll().Results
 
-	local Visual_data = {}
+	local VisualData = {}
 
 	for SlotIndex = 1, SlotsUnlocked do
-		Visual_data[SlotIndex] =
-			{ CFrame = Plot.Pads:FindFirstChild(SlotIndex):GetPivot(), Final = RollResults[SlotIndex - 1] }
+		local Pad = Plot.Pads:FindFirstChild(SlotIndex)
+		local Desk = RollResults[SlotIndex - 1]
+
+		if Pad and Desk then
+			local Anchor = Pad:GetPivot() + Vector3.new(0, Levitate, 0)
+
+			for _, Entry in self:GetDeskVisualData(Anchor, Desk) do
+				table.insert(VisualData, Entry)
+			end
+		end
 	end
 
 	if RollingService.LastVizual then
 		RollingService.LastVizual:Destroy()
 	end
 
-	RollingService.LastVizual = RollingService:_roll_vizual(Visual_data)
+	RollingService.LastVizual = RollingService:_RollVizual(VisualData)
 
 	return RollResults
 end

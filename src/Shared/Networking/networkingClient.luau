@@ -173,7 +173,7 @@ function SerdesFunctions.WriteFUNCTION_DATA_Roll(Value: number, InvocationIdenti
 	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value)
 end
 
-function SerdesFunctions.ReadFUNCTION_RETURN_Roll(): ({ Player: Player, Results: {[number]: { Variant: string, Component: string }} })
+function SerdesFunctions.ReadFUNCTION_RETURN_Roll(): ({ Player: Player, Results: {[number]: { Computer: string, Keyboard: string, Monitor: string }} })
 	-- Read BLOCK: 3 bytes
 	local BLOCK_START = Read(3)
 	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -195,14 +195,19 @@ function SerdesFunctions.ReadFUNCTION_RETURN_Roll(): ({ Player: Player, Results:
 		local Element_1 = {} :: any
 		local OFFSET_1 = Read(1)
 		local Length = buffer.readu8(RecieveBuffer, OFFSET_1)
-		Element_1.Variant = buffer.readstring(RecieveBuffer, Read(Length), Length)
-		if #Element_1.Variant < 1 then error(`Expected length of "Element_1.Variant" to be larger than 1, got {#Element_1.Variant} instead.`) end
-		if #Element_1.Variant > 20 then error(`Expected length of "Element_1.Variant" to be smaller than 20, got {#Element_1.Variant} instead.`) end
+		Element_1.Computer = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Element_1.Computer < 1 then error(`Expected length of "Element_1.Computer" to be larger than 1, got {#Element_1.Computer} instead.`) end
+		if #Element_1.Computer > 20 then error(`Expected length of "Element_1.Computer" to be smaller than 20, got {#Element_1.Computer} instead.`) end
 		local OFFSET_2 = Read(1)
 		Length = buffer.readu8(RecieveBuffer, OFFSET_2)
-		Element_1.Component = buffer.readstring(RecieveBuffer, Read(Length), Length)
-		if #Element_1.Component < 1 then error(`Expected length of "Element_1.Component" to be larger than 1, got {#Element_1.Component} instead.`) end
-		if #Element_1.Component > 20 then error(`Expected length of "Element_1.Component" to be smaller than 20, got {#Element_1.Component} instead.`) end
+		Element_1.Keyboard = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Element_1.Keyboard < 1 then error(`Expected length of "Element_1.Keyboard" to be larger than 1, got {#Element_1.Keyboard} instead.`) end
+		if #Element_1.Keyboard > 20 then error(`Expected length of "Element_1.Keyboard" to be smaller than 20, got {#Element_1.Keyboard} instead.`) end
+		local OFFSET_3 = Read(1)
+		Length = buffer.readu8(RecieveBuffer, OFFSET_3)
+		Element_1.Monitor = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Element_1.Monitor < 1 then error(`Expected length of "Element_1.Monitor" to be larger than 1, got {#Element_1.Monitor} instead.`) end
+		if #Element_1.Monitor > 20 then error(`Expected length of "Element_1.Monitor" to be smaller than 20, got {#Element_1.Monitor} instead.`) end
 		Value.Results[Key_1] = Element_1
 	end
 	return Value
@@ -257,6 +262,12 @@ function SerdesFunctions.Plot_ReadEVENT_UpdatePlots(): ({[Player]: number})
 	return Value
 end
 
+function SerdesFunctions.Purchases_WriteEVENT_BuyDesk(Value: nil): ()
+	-- Allocate BLOCK: 1 bytes
+	local BLOCK_START = Allocate(1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 3)
+end
+
 if not RunService:IsRunning() then
 	local NOOP = function() end
 	local Returns = table.freeze({
@@ -274,6 +285,9 @@ if not RunService:IsRunning() then
 	Stealing = {
 	},
 	Purchases = {
+		BuyDesk = {
+			Fire = NOOP
+		},
 	},
 	NPCs = {
 	},
@@ -389,7 +403,7 @@ local Returns = table.freeze({
 				OnCancel(function ()
 					Calls[InvocationIdentifier] = nil
 				end)
-				local Success, ReturnValue: { Player: Player, Results: {[number]: { Variant: string, Component: string }} } = coroutine.yield()
+				local Success, ReturnValue: { Player: Player, Results: {[number]: { Computer: string, Keyboard: string, Monitor: string }} } = coroutine.yield()
 				if Success ~= true then
 					Reject("There was an exception while processing \"Roll\".")
 					return 
@@ -439,6 +453,11 @@ local Returns = table.freeze({
 	Stealing = {
 	},
 	Purchases = {
+		BuyDesk = {
+			Fire = function(Value: nil): ()
+				SerdesFunctions.Purchases_WriteEVENT_BuyDesk(Value)
+			end
+		},
 	},
 	NPCs = {
 	},

@@ -16,6 +16,8 @@ local Config = {
 		Cash = 200, -- Starting amount, subject to change but I think it should be enough for tutorial
 		Rebirths = 0,
 
+		Luck = 1, -- Multiplier on the roll odds. 1 is the plain table, 2 doubles the rarest chance
+
 		RerollPads = 9,
 
 		Employees = {} :: { [number]: { desk: { Floor: number, Desk: number }, EmployeeType: string } },
@@ -49,7 +51,7 @@ local Config = {
 
 	--- -- --- -- --- -- ---
 
-	UseMock = true,
+	UseMock = false,
 	ViewUserId = nil,
 	DontSave = false,
 }

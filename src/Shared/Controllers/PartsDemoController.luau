@@ -1,6 +1,6 @@
---> Standalone showcase: builds every Variant/Component model out at DEMO_ORIGIN with a
---> billboard render floating over each one. Nothing else requires this, call it by hand:
---> require(Shared.Controllers.PartsDemoController):Init()
+--> Standalone showcase: builds every Variant/Component model out at DemoOrigin with a
+--> billboard render floating over each one. Nothing builds it on startup, it goes up on
+--> demand through the `partsdemo` console command.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,26 +11,26 @@ local Assets = ReplicatedStorage:WaitForChild("Assets")
 local Renders = require(Shared.Configs.Renders)
 local PartConfigs = require(Shared.Configs.Parts)
 
-local DEMO_ORIGIN = Vector3.new(0, 1000, 0)
-local DEMO_NAME = "PartsDemo"
+local DemoOrigin = Vector3.new(0, 1000, 0)
+local DemoName = "PartsDemo"
 
 --> Cheapest to priciest, so each row reads left to right as a value ramp.
-local COMPONENT_ORDER = { "Keyboard", "Monitor", "Computer" }
+local ComponentOrder = { "Keyboard", "Monitor", "Computer" }
 
-local VARIANTS_PER_ROW = 4
-local COMPONENT_SPACING = 11
-local GROUP_SPACING_X = 40
-local GROUP_SPACING_Z = 17
+local VariantsPerRow = 4
+local ComponentSpacing = 11
+local GroupSpacingX = 40
+local GroupSpacingZ = 17
 
-local PEDESTAL_SIZE = Vector3.new(8, 1, 8)
-local PEDESTAL_COLOR = Color3.fromRGB(48, 52, 60)
-local FLOOR_PADDING = 16
-local FLOOR_THICKNESS = 2
-local FLOOR_COLOR = Color3.fromRGB(30, 32, 38)
+local PedestalSize = Vector3.new(8, 1, 8)
+local PedestalColor = Color3.fromRGB(48, 52, 60)
+local FloorPadding = 16
+local FloorThickness = 2
+local FloorColor = Color3.fromRGB(30, 32, 38)
 
-local BILLBOARD_STUDS = 6
-local BILLBOARD_GAP = 1.5
-local BILLBOARD_MAX_DISTANCE = 300
+local BillboardStuds = 6
+local BillboardGap = 1.5
+local BillboardMaxDistance = 300
 
 local PartsDemoController = {
 	Container = nil :: Model?,
@@ -78,12 +78,12 @@ end
 local function BuildPedestal(Position: Vector3, Parent: Instance): Part
 	local Pedestal = Instance.new("Part")
 	Pedestal.Name = "Pedestal"
-	Pedestal.Size = PEDESTAL_SIZE
-	Pedestal.CFrame = CFrame.new(Position - Vector3.new(0, PEDESTAL_SIZE.Y / 2, 0))
+	Pedestal.Size = PedestalSize
+	Pedestal.CFrame = CFrame.new(Position - Vector3.new(0, PedestalSize.Y / 2, 0))
 	Pedestal.Anchored = true
 	Pedestal.CanCollide = true
 	Pedestal.Material = Enum.Material.SmoothPlastic
-	Pedestal.Color = PEDESTAL_COLOR
+	Pedestal.Color = PedestalColor
 	Pedestal.TopSurface = Enum.SurfaceType.Smooth
 	Pedestal.BottomSurface = Enum.SurfaceType.Smooth
 	Pedestal.Parent = Parent
@@ -94,10 +94,10 @@ end
 local function BuildBillboard(Adornee: BasePart, Image: string, Label: string, Height: number)
 	local Billboard = Instance.new("BillboardGui")
 	Billboard.Name = "Render"
-	Billboard.Size = UDim2.fromScale(BILLBOARD_STUDS, BILLBOARD_STUDS * 1.2)
+	Billboard.Size = UDim2.fromScale(BillboardStuds, BillboardStuds * 1.2)
 	Billboard.SizeOffset = Vector2.new(0, 0.5) --> sit fully above the offset point
-	Billboard.StudsOffsetWorldSpace = Vector3.new(0, Height + BILLBOARD_GAP, 0)
-	Billboard.MaxDistance = BILLBOARD_MAX_DISTANCE
+	Billboard.StudsOffsetWorldSpace = Vector3.new(0, Height + BillboardGap, 0)
+	Billboard.MaxDistance = BillboardMaxDistance
 	Billboard.LightInfluence = 0
 	Billboard.ResetOnSpawn = false
 	Billboard.Adornee = Adornee
@@ -127,12 +127,12 @@ end
 local function BuildFloor(Width: number, Depth: number, Parent: Instance)
 	local Floor = Instance.new("Part")
 	Floor.Name = "Floor"
-	Floor.Size = Vector3.new(Width + FLOOR_PADDING * 2, FLOOR_THICKNESS, Depth + FLOOR_PADDING * 2)
-	Floor.CFrame = CFrame.new(DEMO_ORIGIN - Vector3.new(0, PEDESTAL_SIZE.Y + FLOOR_THICKNESS / 2, 0))
+	Floor.Size = Vector3.new(Width + FloorPadding * 2, FloorThickness, Depth + FloorPadding * 2)
+	Floor.CFrame = CFrame.new(DemoOrigin - Vector3.new(0, PedestalSize.Y + FloorThickness / 2, 0))
 	Floor.Anchored = true
 	Floor.CanCollide = true
 	Floor.Material = Enum.Material.SmoothPlastic
-	Floor.Color = FLOOR_COLOR
+	Floor.Color = FloorColor
 	Floor.TopSurface = Enum.SurfaceType.Smooth
 	Floor.BottomSurface = Enum.SurfaceType.Smooth
 	Floor.Parent = Parent
@@ -149,7 +149,7 @@ local function PlaceOnGround(Model: Model, Position: Vector3): number
 end
 
 function PartsDemoController:Clear()
-	local Existing = self.Container or workspace:FindFirstChild(DEMO_NAME)
+	local Existing = self.Container or workspace:FindFirstChild(DemoName)
 	if Existing then
 		Existing:Destroy()
 	end
@@ -163,39 +163,39 @@ function PartsDemoController:Build(): Model
 	self:Clear()
 
 	local Container = Instance.new("Model")
-	Container.Name = DEMO_NAME
+	Container.Name = DemoName
 
 	local Variants = GetVariantOrder()
-	local Columns = math.min(#Variants, VARIANTS_PER_ROW)
-	local Rows = math.ceil(#Variants / VARIANTS_PER_ROW)
+	local Columns = math.min(#Variants, VariantsPerRow)
+	local Rows = math.ceil(#Variants / VariantsPerRow)
 
-	local GridWidth = (Columns - 1) * GROUP_SPACING_X + (#COMPONENT_ORDER - 1) * COMPONENT_SPACING
-	local GridDepth = (Rows - 1) * GROUP_SPACING_Z
+	local GridWidth = (Columns - 1) * GroupSpacingX + (#ComponentOrder - 1) * ComponentSpacing
+	local GridDepth = (Rows - 1) * GroupSpacingZ
 	local StartX = -GridWidth / 2
 	local StartZ = -GridDepth / 2
 
 	BuildFloor(GridWidth, GridDepth, Container)
 
 	for VariantIndex, Variant in Variants do
-		local GroupX = (VariantIndex - 1) % VARIANTS_PER_ROW
-		local GroupZ = math.floor((VariantIndex - 1) / VARIANTS_PER_ROW)
+		local GroupX = (VariantIndex - 1) % VariantsPerRow
+		local GroupZ = math.floor((VariantIndex - 1) / VariantsPerRow)
 
 		local Group = Instance.new("Folder")
 		Group.Name = Variant
 		Group.Parent = Container
 
-		for ComponentIndex, Component in COMPONENT_ORDER do
+		for ComponentIndex, Component in ComponentOrder do
 			local Render = Renders.Components[Variant][Component]
 			if not Render then
 				warn(`[PartsDemo] No render for {Variant}.{Component}`)
 				continue
 			end
 
-			local Position = DEMO_ORIGIN
+			local Position = DemoOrigin
 				+ Vector3.new(
-					StartX + GroupX * GROUP_SPACING_X + (ComponentIndex - 1) * COMPONENT_SPACING,
+					StartX + GroupX * GroupSpacingX + (ComponentIndex - 1) * ComponentSpacing,
 					0,
-					StartZ + GroupZ * GROUP_SPACING_Z
+					StartZ + GroupZ * GroupSpacingZ
 				)
 
 			local Pedestal = BuildPedestal(Position, Group)
@@ -204,7 +204,7 @@ function PartsDemoController:Build(): Model
 			local Success, Model = pcall(Parts, Component, Variant)
 			if not Success or not Model then
 				warn(`[PartsDemo] Failed to load {Variant}.{Component}: {Model}`)
-				BuildBillboard(Pedestal, Render, `{Variant} {Component}\n(missing model)`, PEDESTAL_SIZE.Y)
+				BuildBillboard(Pedestal, Render, `{Variant} {Component}\n(missing model)`, PedestalSize.Y)
 				continue
 			end
 
@@ -238,11 +238,7 @@ function PartsDemoController:Teleport()
 		return
 	end
 
-	Character:PivotTo(CFrame.new(DEMO_ORIGIN + Vector3.new(0, 5, -35)) * CFrame.Angles(0, math.pi, 0))
-end
-
-function PartsDemoController:Init(): Model
-	return self:Build()
+	Character:PivotTo(CFrame.new(DemoOrigin + Vector3.new(0, 5, -35)) * CFrame.Angles(0, math.pi, 0))
 end
 
 return PartsDemoController
