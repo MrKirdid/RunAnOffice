@@ -165,6 +165,8 @@ local SerdesThread: thread?
 Queue.Reliable[0] = table.create(256)
 Queue.Reliable[1] = table.create(256)
 Queue.Reliable[3] = table.create(256)
+Queue.Reliable[4] = table.create(256)
+Queue.Reliable[5] = table.create(256)
 export type Player = Player
 function SerdesFunctions.ReadFUNCTION_DATA_Roll(): (number)
 	-- Read BLOCK: 1 bytes
@@ -175,7 +177,7 @@ function SerdesFunctions.ReadFUNCTION_DATA_Roll(): (number)
 	return Value
 end
 
-function SerdesFunctions.WriteFUNCTION_RETURN_Roll(Value: { Player: Player, Results: {[number]: { Computer: string, Keyboard: string, Monitor: string }} }, InvocationIdentifier: number): ()
+function SerdesFunctions.WriteFUNCTION_RETURN_Roll(Value: { Player: Player, Results: {[number]: { Component: string, Variant: string }} }, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 5 bytes
 	local BLOCK_START = Allocate(5)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
@@ -187,21 +189,16 @@ function SerdesFunctions.WriteFUNCTION_RETURN_Roll(Value: { Player: Player, Resu
 		Elements_1 += 1
 		local OFFSET_0 = Allocate(1)
 		buffer.writeu8(SendBuffer, OFFSET_0, Key_1)
-		local Length = #Element_1.Computer
+		local Length = #Element_1.Component
 		local OFFSET_1 = Allocate(1)
 		buffer.writeu8(SendBuffer, OFFSET_1, Length)
 		Allocate(Length)
-		buffer.writestring(SendBuffer, SendOffset, Element_1.Computer, Length)
-		local Length = #Element_1.Keyboard
+		buffer.writestring(SendBuffer, SendOffset, Element_1.Component, Length)
+		local Length = #Element_1.Variant
 		local OFFSET_2 = Allocate(1)
 		buffer.writeu8(SendBuffer, OFFSET_2, Length)
 		Allocate(Length)
-		buffer.writestring(SendBuffer, SendOffset, Element_1.Keyboard, Length)
-		local Length = #Element_1.Monitor
-		local OFFSET_3 = Allocate(1)
-		buffer.writeu8(SendBuffer, OFFSET_3, Length)
-		Allocate(Length)
-		buffer.writestring(SendBuffer, SendOffset, Element_1.Monitor, Length)
+		buffer.writestring(SendBuffer, SendOffset, Element_1.Variant, Length)
 	end
 	buffer.writeu16(SendBuffer, BLOCK_START + 3, Elements_1)
 end
@@ -240,6 +237,60 @@ function SerdesFunctions.Plot_WriteEVENT_UpdatePlots(Value: {[Player]: number}):
 	buffer.writeu16(SendBuffer, BLOCK_START + 1, Elements_1)
 end
 
+function SerdesFunctions.Items_ReadFUNCTION_DATA_PickUp(): (number)
+	-- Read BLOCK: 1 bytes
+	local BLOCK_START = Read(1)
+	local Value = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Value < 0 then error(`Expected "Value" to be larger than 0, got {Value} instead.`) end
+	if Value > 16 then error(`Expected "Value" to be smaller than 16, got {Value} instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Items_WriteFUNCTION_RETURN_PickUp(Value: { Component: string, Variant: string }, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 5 bytes
+	local BLOCK_START = Allocate(5)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	local Length = #Value.Component
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.Component, Length)
+	local Length = #Value.Variant
+	buffer.writeu8(SendBuffer, BLOCK_START + 4, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.Variant, Length)
+end
+
+function SerdesFunctions.Items_ReadFUNCTION_DATA_Replace(): ({ Floor: number, Slot: number })
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Value = {} :: any
+	Value.Floor = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Value.Floor < 1 then error(`Expected "Value.Floor" to be larger than 1, got {Value.Floor} instead.`) end
+	if Value.Floor > 16 then error(`Expected "Value.Floor" to be smaller than 16, got {Value.Floor} instead.`) end
+	Value.Slot = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	if Value.Slot < 1 then error(`Expected "Value.Slot" to be larger than 1, got {Value.Slot} instead.`) end
+	if Value.Slot > 16 then error(`Expected "Value.Slot" to be smaller than 16, got {Value.Slot} instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Items_WriteFUNCTION_RETURN_Replace(Value: { Component: string, Variant: string }, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 5 bytes
+	local BLOCK_START = Allocate(5)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	local Length = #Value.Component
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.Component, Length)
+	local Length = #Value.Variant
+	buffer.writeu8(SendBuffer, BLOCK_START + 4, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.Variant, Length)
+end
+
 function SerdesFunctions.Purchases_ReadEVENT_BuyDesk(): (nil)
 	return nil
 end
@@ -259,6 +310,14 @@ if not RunService:IsRunning() then
 			FireAll = NOOP,
 			FireList = NOOP,
 			FireExcept = NOOP
+		},
+	},
+	Items = {
+		PickUp = {
+			On = NOOP
+		},
+		Replace = {
+			On = NOOP
 		},
 	},
 	Stealing = {
@@ -359,14 +418,40 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 				table.insert(Queue.Reliable[1], {Player, Value, InvocationIdentifier} :: {any})
 			end
 		elseif Index == 3 then
-			local Value: nil = SerdesFunctions.Purchases_ReadEVENT_BuyDesk()
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: number = SerdesFunctions.Items_ReadFUNCTION_DATA_PickUp()
 			if Events.Reliable[3] ~= nil then
-				task.spawn(Events.Reliable[3], Player, Value)
+				task.spawn(Events.Reliable[3], Player, Value, InvocationIdentifier)
 			else
 				if #Queue.Reliable[3] > 256 then
+					warn("[Blink]: Event queue of \"PickUp\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[3], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 4 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: { Floor: number, Slot: number } = SerdesFunctions.Items_ReadFUNCTION_DATA_Replace()
+			if Events.Reliable[4] ~= nil then
+				task.spawn(Events.Reliable[4], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[4] > 256 then
+					warn("[Blink]: Event queue of \"Replace\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[4], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 5 then
+			local Value: nil = SerdesFunctions.Purchases_ReadEVENT_BuyDesk()
+			if Events.Reliable[5] ~= nil then
+				task.spawn(Events.Reliable[5], Player, Value)
+			else
+				if #Queue.Reliable[5] > 256 then
 					warn("[Blink]: Event queue of \"BuyDesk\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[3], {Player, Value} :: {any})
+				table.insert(Queue.Reliable[5], {Player, Value} :: {any})
 			end
 		end
 	end
@@ -394,9 +479,9 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	Roll = {
-		On = function(Listener: (Player, number) -> ({ Player: Player, Results: {[number]: { Computer: string, Keyboard: string, Monitor: string }} })): ()
+		On = function(Listener: (Player, number) -> ({ Player: Player, Results: {[number]: { Component: string, Variant: string }} })): ()
 			Events.Reliable[0] = function(Player: Player, Value: number, InvocationIdentifier: number): ()
-				local ReturnValue: { Player: Player, Results: {[number]: { Computer: string, Keyboard: string, Monitor: string }} };
+				local ReturnValue: { Player: Player, Results: {[number]: { Component: string, Variant: string }} };
 				local Success, Error = pcall(function ()
 					ReturnValue = Listener(Player, Value)
 				end)
@@ -497,19 +582,77 @@ local Returns = table.freeze({
 			end,
 		},
 	},
+	Items = {
+		PickUp = {
+		On = function(Listener: (Player, number) -> ({ Component: string, Variant: string })): ()
+			Events.Reliable[3] = function(Player: Player, Value: number, InvocationIdentifier: number): ()
+				local ReturnValue: { Component: string, Variant: string };
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 3)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"PickUp" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Items_WriteFUNCTION_RETURN_PickUp(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[3] or {}
+				Queue.Reliable[3] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[3](table.unpack(Arguments))
+				end
+			end)
+		end
+		},
+		Replace = {
+		On = function(Listener: (Player, { Floor: number, Slot: number }) -> ({ Component: string, Variant: string })): ()
+			Events.Reliable[4] = function(Player: Player, Value: { Floor: number, Slot: number }, InvocationIdentifier: number): ()
+				local ReturnValue: { Component: string, Variant: string };
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 4)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"Replace" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Items_WriteFUNCTION_RETURN_Replace(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[4] or {}
+				Queue.Reliable[4] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[4](table.unpack(Arguments))
+				end
+			end)
+		end
+		},
+	},
 	Stealing = {
 	},
 	Purchases = {
 		BuyDesk = {
 			On = function(Listener: (Player: Player, Value: nil) -> ()): () -> ()
-				Events.Reliable[3] = Listener
-				for Index, Arguments in Queue.Reliable[3] do
+				Events.Reliable[5] = Listener
+				for Index, Arguments in Queue.Reliable[5] do
 					task.spawn(Listener, table.unpack(Arguments))
 				end
-				Queue.Reliable[3] = {}
+				Queue.Reliable[5] = {}
 				return function (): ()
-					if Events.Reliable[3] == Listener then
-						Events.Reliable[3] = nil
+					if Events.Reliable[5] == Listener then
+						Events.Reliable[5] = nil
 					end
 				end
 			end

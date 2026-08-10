@@ -20,6 +20,15 @@ local Config = {
 
 		RerollPads = 9,
 
+		--> What each reroll pad is holding right now, keyed by slot. The server writes this when
+		--> it rolls and clears the slot when the part is picked up, so a part can only ever be
+		--> claimed once and only if the server put it there.
+		Pads = {} :: { [number]: { Component: string, Variant: string } },
+
+		--> The one component in hand. Empty table means empty handed. One slot is the whole
+		--> anti duplication story: a part is moved into it and moved out, never copied.
+		Holding = {} :: { Component: string?, Variant: string? },
+
 		Employees = {} :: { [number]: { desk: { Floor: number, Desk: number }, EmployeeType: string } },
 
 		Floors = {

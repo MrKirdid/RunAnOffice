@@ -1,101 +1,106 @@
---> Rarity is a relative weight in parts-per-million. Each group sums to 1_000_000,
+--> Rarity is a relative weight in parts-per-billion. Each group sums to 1_000_000_000,
 --> so a weight doubles as the raw chance and the "1 in N" comments stay honest.
---> Variants step ~1.42x rarer per tier, so every one stays realistically farmable.
+--> Billionths rather than millionths because the rare end no longer fits in millionths:
+--> Premium lands at 1.3 in a billion, which rounds to nothing on the coarser scale.
+--> Variants step ~1.9x rarer per tier at the common end and widen to ~2.8x at the rare
+--> end, so the ladder pulls apart as it climbs instead of staying evenly farmable. A roll
+--> fills every unlocked pad at once, so a variant's real pace is its odds over 9 to 17
+--> draws, not one: anything under about 1 in 500 shows up on most rolls.
 
 return {
 	BaseValues = {
 		Keyboard = {
 			Value = 1,
-			Rarity = 500_000, -- 1 in 2
+			Rarity = 500_000_000, -- 1 in 2
 		},
 		Monitor = {
 			Value = 1.5,
-			Rarity = 330_000, -- 1 in 3
+			Rarity = 330_000_000, -- 1 in 3
 		},
 		Computer = {
 			Value = 3,
-			Rarity = 170_000, -- 1 in 5.9
+			Rarity = 170_000_000, -- 1 in 5.9
 		},
 	},
 	Variants = {
 		Mossy = {
 			Value = 4,
-			Rarity = 297_000, -- 1 in 3.4
+			Rarity = 491_700_000, -- 1 in 2
 		},
 
 		Wooden = {
 			Value = 6,
-			Rarity = 209_000, -- 1 in 4.8
+			Rarity = 258_800_000, -- 1 in 3.9
 		},
 
 		Tree = {
 			Value = 8,
-			Rarity = 147_000, -- 1 in 6.8
+			Rarity = 129_400_000, -- 1 in 7.7
 		},
 
 		Coral = {
 			Value = 12,
-			Rarity = 104_000, -- 1 in 9.6
+			Rarity = 64_700_000, -- 1 in 15
 		},
 
 		Cloudy = {
 			Value = 16,
-			Rarity = 73_000, -- 1 in 14
+			Rarity = 30_835_000, -- 1 in 32
 		},
 
 		Kitty = {
 			Value = 22,
-			Rarity = 51_500, -- 1 in 19
+			Rarity = 14_000_000, -- 1 in 71
 		},
 
 		Emotional = {
 			Value = 30,
-			Rarity = 36_000, -- 1 in 28
+			Rarity = 6_090_000, -- 1 in 164
 		},
 
 		DigCraft = {
 			Value = 40,
-			Rarity = 25_500, -- 1 in 39
+			Rarity = 2_650_000, -- 1 in 377
 		},
 
 		Tokyo = {
 			Value = 55,
-			Rarity = 18_000, -- 1 in 56
+			Rarity = 1_100_000, -- 1 in 909
 		},
 
 		Steampunk = {
 			Value = 75,
-			Rarity = 12_600, -- 1 in 79
+			Rarity = 440_000, -- 1 in 2,273
 		},
 
 		Witch = {
 			Value = 100,
-			Rarity = 8_900, -- 1 in 112
+			Rarity = 176_000, -- 1 in 5,682
 		},
 
 		Wizzard = {
 			Value = 135,
-			Rarity = 6_300, -- 1 in 159
+			Rarity = 68_000, -- 1 in 14,706
 		},
 
 		Space = {
 			Value = 180,
-			Rarity = 4_400, -- 1 in 227
+			Rarity = 26_000, -- 1 in 38,462
 		},
 
 		Galaxy = {
 			Value = 240,
-			Rarity = 3_100, -- 1 in 323
+			Rarity = 10_000, -- 1 in 100,000
 		},
 
 		Hardcore = {
 			Value = 320,
-			Rarity = 2_200, -- 1 in 455
+			Rarity = 3_700, -- 1 in 270,270
 		},
 
 		Premium = {
 			Value = 450,
-			Rarity = 1_500, -- 1 in 667
+			Rarity = 1_300, -- 1 in 769,231
 		},
 	},
 }

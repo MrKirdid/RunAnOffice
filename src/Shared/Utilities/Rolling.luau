@@ -136,6 +136,8 @@ function Rolling.Chances(Entries: Entries, Luck: number?): { [string]: number }
 	return Chances
 end
 
+--> One pad's worth: which component fell out and how good it turned out. Both are drawn,
+--> because a pad is not tied to a desk slot the way the three desk components are.
 function Rolling.RollOne(Luck: number?, Generator: Random?): Result
 	return {
 		Variant = Rolling.Pick(Parts.Variants, Luck, Generator),
@@ -158,11 +160,13 @@ function Rolling.RollDesk(Luck: number?, Generator: Random?): Desk
 	}
 end
 
---> Slots are zero based to match the networked map, which is keyed [0..16].
-function Rolling.Roll(Count: number, Luck: number?, Generator: Random?): { [number]: Desk }
+--> The pad roll, which is not a desk roll: every slot draws its own component as well as its
+--> own variant, so one pad can land a Premium keyboard while the pad beside it lands a Mossy
+--> monitor. Slots are zero based to match the networked map, which is keyed [0..16].
+function Rolling.Roll(Count: number, Luck: number?, Generator: Random?): { [number]: Result }
 	local Results = {}
 	for Slot = 0, Count - 1 do
-		Results[Slot] = Rolling.RollDesk(Luck, Generator)
+		Results[Slot] = Rolling.RollOne(Luck, Generator)
 	end
 
 	return Results

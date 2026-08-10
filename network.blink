@@ -15,11 +15,10 @@ function Roll {
 	Data: u8(1..17),
 	Return: struct {
 		Player: Player,
-		-- [slot 0-16]: the desk rolled into that slot, one variant per component
+		-- [slot 0-16]: the single component that pad rolled, and the variant it landed on
 		Results: map { [u8(0..16)]: struct {
-			Computer: string(1..20),
-			Keyboard: string(1..20),
-			Monitor: string(1..20)
+			Component: string(1..20),
+			Variant: string(1..20)
 		} }
 	}
 }
@@ -35,6 +34,33 @@ scope Plot {
 		Type: Reliable,
 		Call: SingleAsync,
 		Data: map { [Player]: u8(0..8) }
+	}
+}
+
+scope Items {
+	-- which pad to take from. The server put the parts there, so the slot is all it needs
+	-- from the client and the client cannot name a part it did not roll.
+	function PickUp {
+		Yield: Promise,
+		Data: u8(0..16),
+		Return: struct {
+			Component: string(1..20),
+			Variant: string(1..20)
+		}
+	}
+
+	-- the desk to drop what is in hand onto. Which component it lands in is decided by what the
+	-- player is holding, which is server side, so it is not a thing the client gets to pick.
+	function Replace {
+		Yield: Promise,
+		Data: struct {
+			Floor: u8(1..16),
+			Slot: u8(1..16)
+		},
+		Return: struct {
+			Component: string(1..20),
+			Variant: string(1..20)
+		}
 	}
 }
 

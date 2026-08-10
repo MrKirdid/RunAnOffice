@@ -1,4 +1,4 @@
---> Who gets the Cmdr console. Studio always counts so a solo playtest never needs this file
+--> Who gets the Kmdr console. Studio always counts so a solo playtest never needs this file
 --> touched, and a user owned place lets its owner in without an ID lookup. Everyone else has
 --> to be listed here by UserId.
 

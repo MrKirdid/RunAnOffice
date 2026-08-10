@@ -102,16 +102,28 @@ function DeskController:GetNextAvailableDesk(): (number?, number?)
 end
 
 function DeskController:Start()
+	--> A desk's parts can change without the desk itself coming or going, which is exactly what a
+	--> component swap is. Nothing else would rebuild it, so the old part would stay on the desk
+	--> with the new one only existing in data.
+	local WatchDesk = function(Floor: number, Slot: number)
+		PlayerData.Floors[Floor].Desks[Slot].Changed(function()
+			self:SpawnComponents(Floor, Slot)
+		end)
+	end
+
 	local WatchFloor = function(Floor: number)
 		local Desks = PlayerData.Floors[Floor].Desks
 
 		for Slot in Desks() do
 			self:NewDesk(Floor, Slot)
+			WatchDesk(Floor, Slot)
 		end
 
 		--> Spawned mid session means it was just bought, so roll it in. Spawned in the
 		--> loop above means the player already owned it, so it appears fully built.
 		Desks.OnKeyAdded(function(Slot: number)
+			WatchDesk(Floor, Slot)
+
 			task.spawn(function()
 				self:NewDesk(Floor, Slot, true)
 			end)

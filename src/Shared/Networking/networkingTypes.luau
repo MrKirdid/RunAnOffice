@@ -155,6 +155,8 @@ export type Player = Player
 return {
 	Plot = {
 	},
+	Items = {
+	},
 	Stealing = {
 	},
 	Purchases = {

@@ -164,6 +164,8 @@ local SerdesThread: thread?
 Queue.Reliable[0] = table.create(256)
 Queue.Reliable[1] = table.create(256)
 Queue.Reliable[2] = table.create(256)
+Queue.Reliable[3] = table.create(256)
+Queue.Reliable[4] = table.create(256)
 export type Player = Player
 function SerdesFunctions.WriteFUNCTION_DATA_Roll(Value: number, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 3 bytes
@@ -173,7 +175,7 @@ function SerdesFunctions.WriteFUNCTION_DATA_Roll(Value: number, InvocationIdenti
 	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value)
 end
 
-function SerdesFunctions.ReadFUNCTION_RETURN_Roll(): ({ Player: Player, Results: {[number]: { Computer: string, Keyboard: string, Monitor: string }} })
+function SerdesFunctions.ReadFUNCTION_RETURN_Roll(): ({ Player: Player, Results: {[number]: { Component: string, Variant: string }} })
 	-- Read BLOCK: 3 bytes
 	local BLOCK_START = Read(3)
 	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -195,19 +197,14 @@ function SerdesFunctions.ReadFUNCTION_RETURN_Roll(): ({ Player: Player, Results:
 		local Element_1 = {} :: any
 		local OFFSET_1 = Read(1)
 		local Length = buffer.readu8(RecieveBuffer, OFFSET_1)
-		Element_1.Computer = buffer.readstring(RecieveBuffer, Read(Length), Length)
-		if #Element_1.Computer < 1 then error(`Expected length of "Element_1.Computer" to be larger than 1, got {#Element_1.Computer} instead.`) end
-		if #Element_1.Computer > 20 then error(`Expected length of "Element_1.Computer" to be smaller than 20, got {#Element_1.Computer} instead.`) end
+		Element_1.Component = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Element_1.Component < 1 then error(`Expected length of "Element_1.Component" to be larger than 1, got {#Element_1.Component} instead.`) end
+		if #Element_1.Component > 20 then error(`Expected length of "Element_1.Component" to be smaller than 20, got {#Element_1.Component} instead.`) end
 		local OFFSET_2 = Read(1)
 		Length = buffer.readu8(RecieveBuffer, OFFSET_2)
-		Element_1.Keyboard = buffer.readstring(RecieveBuffer, Read(Length), Length)
-		if #Element_1.Keyboard < 1 then error(`Expected length of "Element_1.Keyboard" to be larger than 1, got {#Element_1.Keyboard} instead.`) end
-		if #Element_1.Keyboard > 20 then error(`Expected length of "Element_1.Keyboard" to be smaller than 20, got {#Element_1.Keyboard} instead.`) end
-		local OFFSET_3 = Read(1)
-		Length = buffer.readu8(RecieveBuffer, OFFSET_3)
-		Element_1.Monitor = buffer.readstring(RecieveBuffer, Read(Length), Length)
-		if #Element_1.Monitor < 1 then error(`Expected length of "Element_1.Monitor" to be larger than 1, got {#Element_1.Monitor} instead.`) end
-		if #Element_1.Monitor > 20 then error(`Expected length of "Element_1.Monitor" to be smaller than 20, got {#Element_1.Monitor} instead.`) end
+		Element_1.Variant = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Element_1.Variant < 1 then error(`Expected length of "Element_1.Variant" to be larger than 1, got {#Element_1.Variant} instead.`) end
+		if #Element_1.Variant > 20 then error(`Expected length of "Element_1.Variant" to be smaller than 20, got {#Element_1.Variant} instead.`) end
 		Value.Results[Key_1] = Element_1
 	end
 	return Value
@@ -262,10 +259,65 @@ function SerdesFunctions.Plot_ReadEVENT_UpdatePlots(): ({[Player]: number})
 	return Value
 end
 
+function SerdesFunctions.Items_WriteFUNCTION_DATA_PickUp(Value: number, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value)
+end
+
+function SerdesFunctions.Items_ReadFUNCTION_RETURN_PickUp(): ({ Component: string, Variant: string })
+	-- Read BLOCK: 3 bytes
+	local BLOCK_START = Read(3)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = {} :: any
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	Value.Component = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value.Component < 1 then error(`Expected length of "Value.Component" to be larger than 1, got {#Value.Component} instead.`) end
+	if #Value.Component > 20 then error(`Expected length of "Value.Component" to be smaller than 20, got {#Value.Component} instead.`) end
+	Length = buffer.readu8(RecieveBuffer, BLOCK_START + 2)
+	Value.Variant = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value.Variant < 1 then error(`Expected length of "Value.Variant" to be larger than 1, got {#Value.Variant} instead.`) end
+	if #Value.Variant > 20 then error(`Expected length of "Value.Variant" to be smaller than 20, got {#Value.Variant} instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Items_WriteFUNCTION_DATA_Replace(Value: { Floor: number, Slot: number }, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.Floor)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.Slot)
+end
+
+function SerdesFunctions.Items_ReadFUNCTION_RETURN_Replace(): ({ Component: string, Variant: string })
+	-- Read BLOCK: 3 bytes
+	local BLOCK_START = Read(3)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = {} :: any
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	Value.Component = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value.Component < 1 then error(`Expected length of "Value.Component" to be larger than 1, got {#Value.Component} instead.`) end
+	if #Value.Component > 20 then error(`Expected length of "Value.Component" to be smaller than 20, got {#Value.Component} instead.`) end
+	Length = buffer.readu8(RecieveBuffer, BLOCK_START + 2)
+	Value.Variant = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value.Variant < 1 then error(`Expected length of "Value.Variant" to be larger than 1, got {#Value.Variant} instead.`) end
+	if #Value.Variant > 20 then error(`Expected length of "Value.Variant" to be smaller than 20, got {#Value.Variant} instead.`) end
+	return Value
+end
+
 function SerdesFunctions.Purchases_WriteEVENT_BuyDesk(Value: nil): ()
 	-- Allocate BLOCK: 1 bytes
 	local BLOCK_START = Allocate(1)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 5)
 end
 
 if not RunService:IsRunning() then
@@ -280,6 +332,14 @@ if not RunService:IsRunning() then
 		},
 		UpdatePlots = {
 			On = NOOP
+		},
+	},
+	Items = {
+		PickUp = {
+			Invoke = NOOP
+		},
+		Replace = {
+			Invoke = NOOP
 		},
 	},
 	Stealing = {
@@ -365,6 +425,28 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 				end
 				table.insert(Queue.Reliable[2], {Value} :: {any})
 			end
+		elseif Index == 3 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Items_ReadFUNCTION_RETURN_PickUp()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 4 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Items_ReadFUNCTION_RETURN_Replace()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
 		end
 	end
 end)
@@ -403,7 +485,7 @@ local Returns = table.freeze({
 				OnCancel(function ()
 					Calls[InvocationIdentifier] = nil
 				end)
-				local Success, ReturnValue: { Player: Player, Results: {[number]: { Computer: string, Keyboard: string, Monitor: string }} } = coroutine.yield()
+				local Success, ReturnValue: { Player: Player, Results: {[number]: { Component: string, Variant: string }} } = coroutine.yield()
 				if Success ~= true then
 					Reject("There was an exception while processing \"Roll\".")
 					return 
@@ -447,6 +529,52 @@ local Returns = table.freeze({
 						Events.Reliable[2] = nil
 					end
 				end
+			end
+		},
+	},
+	Items = {
+		PickUp = {
+			Invoke = function(Value: number)
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Items_WriteFUNCTION_DATA_PickUp(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: { Component: string, Variant: string } = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"PickUp\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
+			end
+		},
+		Replace = {
+			Invoke = function(Value: { Floor: number, Slot: number })
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Items_WriteFUNCTION_DATA_Replace(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: { Component: string, Variant: string } = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"Replace\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
 			end
 		},
 	},
