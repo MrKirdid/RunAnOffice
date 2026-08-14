@@ -149,6 +149,11 @@ local Queue: any = {
 }
 
 export type Player = Player
+export type Employees_UID = number
+export type Employees_Position = Vector3
+export type Employees_Spawn = { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? }
+export type Employees_Move = { UID: number, Position: Vector3 }
+export type Employees_Ownership = { UID: number, Owner: Player? }
 
 
 
@@ -161,7 +166,7 @@ return {
 	},
 	Purchases = {
 	},
-	NPCs = {
+	Employees = {
 	},
 
 }

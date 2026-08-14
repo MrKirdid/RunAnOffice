@@ -76,6 +76,79 @@ scope Purchases {
 	}
 }
 
-scope NPCs {
+scope Employees {
+	type UID = u32
+	type Position = vector
 
+	-- one employee walking the map. Cost rides along rather than being looked up client side
+	-- so the prompt prints what the server will actually charge.
+	struct Spawn {
+		UID: UID,
+		Name: string(1..20),
+		Type: string(1..20),
+		Cost: u32,
+		Position: Position,
+		Owner: Player?
+	}
+
+	struct Move {
+		UID: UID,
+		Position: Position
+	}
+
+	struct Ownership {
+		UID: UID,
+		Owner: Player?
+	}
+
+	-- everyone already walking when the client joined, so a late joiner is not left with an
+	-- empty map until the next spawn tick.
+	function GetAll {
+		Yield: Promise,
+		Return: Spawn[0..255]
+	}
+
+	-- the one to redirect at a free desk. The buyer is the caller and the seat is picked
+	-- server side, so the client only ever names which employee it wants.
+	function Buy {
+		Yield: Promise,
+		Data: UID,
+		Return: boolean
+	}
+
+	event Added {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: Spawn[0..255]
+	}
+
+	-- unreliable because a dropped step is corrected by the next one a tenth of a second later,
+	-- and the client interpolates between whatever it has.
+	event Moved {
+		From: Server,
+		Type: Unreliable,
+		Call: SingleAsync,
+		Data: struct {
+			UID: UID,
+			Position: Position
+		}[0..255]
+	}
+
+	event Removed {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: UID[0..255]
+	}
+
+	event OwnerChanged {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: struct {
+			UID: UID,
+			Owner: Player?
+		}[0..255]
+	}
 }

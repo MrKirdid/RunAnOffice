@@ -63,6 +63,45 @@ function DeskData.GetTaken(Data: any, Floor: number): { [number]: boolean }
 	return Taken
 end
 
+--> Slots on a floor that hold a desk, lowest first.
+function DeskData.GetSlots(Data: any, Floor: number): { number }
+	local Slots = {}
+	local FloorKey = MatchKey(Data.Floors(), Floor)
+
+	if FloorKey == nil then
+		return Slots
+	end
+
+	for Slot in Data.Floors[FloorKey].Desks() do
+		table.insert(Slots, tonumber(Slot))
+	end
+
+	table.sort(Slots)
+
+	return Slots
+end
+
+--> Lowest desk with nobody in the chair. Skip covers seats spoken for but not filled yet, which
+--> is every employee currently walking to one.
+function DeskData.GetFreeSeat(Data: any, Skip: { [string]: boolean }?): (number?, number?)
+	for _, Floor in DeskData.GetFloors(Data) do
+		for _, Slot in DeskData.GetSlots(Data, Floor) do
+			local Desk = DeskData.Get(Data, Floor, Slot)
+			local Components = Desk and Desk()
+
+			local Free = type(Components) == "table"
+				and Components.Employee == nil
+				and not (Skip and Skip[`{Floor}-{Slot}`])
+
+			if Free then
+				return Floor, Slot
+			end
+		end
+	end
+
+	return nil, nil
+end
+
 --> The handle for a slot that holds a desk, or nil when the slot is empty. Call it to read
 --> the desk, call it with nil to clear the slot.
 function DeskData.Get(Data: any, Floor: number, Slot: number): any?
