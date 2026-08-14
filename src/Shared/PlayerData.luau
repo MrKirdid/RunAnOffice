@@ -29,7 +29,10 @@ local Config = {
 		--> anti duplication story: a part is moved into it and moved out, never copied.
 		Holding = {} :: { Component: string?, Variant: string? },
 
-		Employees = {} :: { [number]: { desk: { Floor: number, Desk: number }, EmployeeType: string } },
+		--> Keyed by a GUID string rather than an index, so a save round trip cannot turn the key
+		--> into something that no longer indexes the same employee. Floor and Slot name the desk
+		--> they are sat at, and only one employee is ever written against a given desk.
+		Employees = {} :: { [string]: { Type: string, Name: string, Floor: number, Slot: number } },
 
 		Floors = {
 			[1] = {

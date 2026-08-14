@@ -1,102 +1,132 @@
---> Who sits at a desk once one is filled. Keyed by name and shaped like Parts.Variants on
---> purpose, so Rolling.Pick and Rolling.Chances take this table straight: an employee is rolled
---> the same way a component variant is, off the same luck, through the same weights.
---> Rarity is written as the odds themselves, 1 / N, because Rolling divides every weight by the
---> table's total anyway: the numbers only ever have to be right relative to each other, so
---> there is nothing to be gained by scaling them up into a sum that has to be maintained.
---> The total lands at 0.9889 rather than a clean 1, which is the whole error: every entry is
---> about 1.1% commoner than the N it is written as. Adding an entry eats into that, so a new
---> hire wants a slot the ladder already has room for rather than being wedged in anywhere.
---> Deliberately a much shorter ladder than the variant one: 1 in 2 to 1 in 5,000 rather than
---> out to 1 in 769,231. Employees spawn on a timer instead of per pad, so the whole table has
---> to be reachable in a session, and the rungs sit ~1.6x apart the whole way up rather than
---> pulling wider as they climb. Nothing here is a months long chase.
---> Value is the multiplier the employee puts on the desk they are sat at, running 1x at the
---> bottom to 5x at the top. It climbs slower than the odds do, which is the point: the ladder
---> is a chase, not a payout curve, and a Founder is worth five Interns rather than 2,500.
---> Because the ladder stops at 1 in 5,000, the tiers in Configs/Rarities only reach Legendary
---> and the top five entries all land in it. Those ceilings were spaced off the variant ladder,
---> so employees want their own ceilings before any of this prints a tier name.
---> There is no sort order field: sorting by Rarity descending is the ladder.
+--> Rarity is a relative weight in parts-per-billion and the group sums to 1_000_000_000, same
+--> as Parts, so a weight doubles as the raw chance and the "1 in N" comments stay honest.
+--> Keys are the model names under Assets.Employees: renaming a model there renames it here.
+--> Value multiplies the desk the employee is sat at, Cost is what hiring one asks for.
 
 return {
-	Intern = {
+	["Tie Guy"] = {
 		Value = 1,
-		Rarity = 1 / 2,
+		Cost = 100,
+		Rarity = 323_844_262, -- 1 in 3.1
 	},
 
-	Temp = {
-		Value = 1.15,
-		Rarity = 1 / 5,
+	["File Folder"] = {
+		Value = 1.13,
+		Cost = 150,
+		Rarity = 218_997_524, -- 1 in 4.6
 	},
 
-	Janitor = {
-		Value = 1.3,
-		Rarity = 1 / 9,
+	["MegaPhone"] = {
+		Value = 1.28,
+		Cost = 230,
+		Rarity = 148_095_617, -- 1 in 6.8
 	},
 
-	Assistant = {
+	["LightBulb"] = {
 		Value = 1.45,
-		Rarity = 1 / 15,
+		Cost = 360,
+		Rarity = 100_148_674, -- 1 in 10
 	},
 
-	Receptionist = {
-		Value = 1.6,
-		Rarity = 1 / 25,
+	["Toasty"] = {
+		Value = 1.63,
+		Cost = 550,
+		Rarity = 67_724_874, -- 1 in 14.8
 	},
 
-	Analyst = {
-		Value = 1.8,
-		Rarity = 1 / 40,
+	["Cupcake"] = {
+		Value = 1.81,
+		Cost = 840,
+		Rarity = 45_798_495, -- 1 in 21.8
 	},
 
-	Engineer = {
+	["Corny"] = {
 		Value = 2,
-		Rarity = 1 / 60,
+		Cost = 1_300,
+		Rarity = 30_970_927, -- 1 in 32.3
 	},
 
-	Accountant = {
+	["Carrot"] = {
 		Value = 2.2,
-		Rarity = 1 / 90,
+		Cost = 2_000,
+		Rarity = 20_943_883, -- 1 in 47.7
 	},
 
-	Manager = {
-		Value = 2.45,
-		Rarity = 1 / 140,
+	["Banana"] = {
+		Value = 2.39,
+		Cost = 3_000,
+		Rarity = 14_163_161, -- 1 in 70.6
 	},
 
-	Consultant = {
-		Value = 2.7,
-		Rarity = 1 / 220,
+	["Hamster"] = {
+		Value = 2.6,
+		Cost = 4_600,
+		Rarity = 9_577_743, -- 1 in 104
 	},
 
-	Director = {
-		Value = 3,
-		Rarity = 1 / 350,
+	["SnowMan"] = {
+		Value = 2.8,
+		Cost = 7_100,
+		Rarity = 6_476_885, -- 1 in 154
 	},
 
-	Executive = {
-		Value = 3.3,
-		Rarity = 1 / 600,
+	["ClockWork"] = {
+		Value = 3.01,
+		Cost = 11_000,
+		Rarity = 4_379_950, -- 1 in 228
 	},
 
-	Partner = {
-		Value = 3.6,
-		Rarity = 1 / 1_000,
+	["TV Head"] = {
+		Value = 3.22,
+		Cost = 17_000,
+		Rarity = 2_961_912, -- 1 in 338
 	},
 
-	President = {
-		Value = 4,
-		Rarity = 1 / 1_800,
+	["Dino Guy"] = {
+		Value = 3.44,
+		Cost = 25_000,
+		Rarity = 2_002_973, -- 1 in 499
 	},
 
-	CEO = {
-		Value = 4.5,
-		Rarity = 1 / 3_000,
+	["Robot"] = {
+		Value = 3.65,
+		Cost = 39_000,
+		Rarity = 1_354_497, -- 1 in 738
 	},
 
-	Founder = {
+	["Spaceman"] = {
+		Value = 3.87,
+		Cost = 59_000,
+		Rarity = 915_970, -- 1 in 1,092
+	},
+
+	["Minotaur"] = {
+		Value = 4.09,
+		Cost = 91_000,
+		Rarity = 619_419, -- 1 in 1,614
+	},
+
+	["Shark Boss"] = {
+		Value = 4.32,
+		Cost = 140_000,
+		Rarity = 418_878, -- 1 in 2,387
+	},
+
+	["MrBossy"] = {
+		Value = 4.54,
+		Cost = 210_000,
+		Rarity = 283_263, -- 1 in 3,530
+	},
+
+	["Mr Money"] = {
+		Value = 4.77,
+		Cost = 330_000,
+		Rarity = 191_555, -- 1 in 5,220
+	},
+
+	["King Ceo"] = {
 		Value = 5,
-		Rarity = 1 / 5_000,
+		Cost = 500_000,
+		Rarity = 129_538, -- 1 in 7,720
 	},
 }

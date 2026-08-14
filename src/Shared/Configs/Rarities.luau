@@ -8,7 +8,7 @@
 --> variants rather than one tier swallowing the whole rare end. They are spaced off the
 --> ladder in Parts, so moving a variant's odds across a ceiling renames it: check both.
 
-return {
+local Rarities = {
 	--> Commonest first, the lookup walks it front to back. The last ceiling is open ended.
 	Tiers = {
 		{ Name = "Common", Ceiling = 5, Color = Color3.fromRGB(205, 210, 220) },
@@ -20,3 +20,18 @@ return {
 		{ Name = "Divine", Ceiling = math.huge, Color = Color3.fromRGB(96, 240, 232) },
 	},
 }
+
+--> Odds is the "1 in N" side, never a chance, so 1 in 500 is passed as 500.
+function Rarities.Of(Odds: number): (string, Color3)
+	for _, Tier in Rarities.Tiers do
+		if Odds <= Tier.Ceiling then
+			return Tier.Name, Tier.Color
+		end
+	end
+
+	local Last = Rarities.Tiers[#Rarities.Tiers]
+
+	return Last.Name, Last.Color
+end
+
+return Rarities
