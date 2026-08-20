@@ -1,34 +1,11 @@
 --!strict
 
---[[
-	NodeConstructor
-
-	An upgrade tree node. Every node builds its own GUI, animates itself and
-	handles its own input, so nothing else has to ship alongside it — no template
-	asset, no support modules.
-
-	A node is an object: it owns its instances, its colour and its notification
-	state. Tree logic (who is visible, who is owned) lives outside of it.
-
-		local root = NodeConstructor.new({ icon = ICON, text = "Root" })
-		root:setParent(mainFrame)
-		root:setIsVisible(true)
-
-		local coins = NodeConstructor.new({
-			direction = NodeConstructor.Direction.bottomRight,
-			color = "green",
-			icon = ICON,
-			text = "Coins I",
-			price = { quantity = 500, currencyIcon = COIN_ICON },
-		}, root)
-
-		coins:setNotificationCount(3)
-
-	Colours live in NodeConstructor.Colors. Pick one through the config's `color`
-	field, or swap it at any time with node:setColor("purple").
---]]
-
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+
+local Fusion = require(Shared.Packages.Fusion)
 
 export type NodeId = string
 
@@ -37,12 +14,6 @@ export type Price = {
 	currencyIcon: string,
 }
 
---[[
-	Everything a node needs to build itself. `parentNodeId`, `showRootId` and
-	`inheritVisibility` are never read by the node — they are here so a whole tree
-	can be described in one config table, and are handed back by node:getConfig()
-	for whoever manages that tree.
---]]
 export type Config = {
 	parentNodeId: NodeId?,
 	showRootId: NodeId?,
@@ -53,7 +24,6 @@ export type Config = {
 	price: Price?,
 	headerText: string?,
 	inheritVisibility: boolean?,
-	-- Name of a colour in NodeConstructor.Colors. Defaults to "default".
 	color: string?,
 }
 
@@ -76,16 +46,25 @@ local BUTTON_FONT = Font.new("rbxassetid://16658221428")
 local PRIMARY_FONT = Font.new("rbxassetid://11702779409", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
 local HEADER_FONT = Font.new("rbxassetid://11702779409", Enum.FontWeight.Bold, Enum.FontStyle.Italic)
 
-local NODE_SIZE = UDim2.fromScale(0.15, 0.15)
+local NODE_SIZE = UDim2.fromScale(0.09, 0.09)
 local HALF_NODE_SIZE = UDim2.fromScale(NODE_SIZE.X.Scale / 2, NODE_SIZE.Y.Scale / 2)
 local HOVERED_SIZE = UDim2.fromScale(NODE_SIZE.X.Scale * 1.15, NODE_SIZE.Y.Scale * 1.15)
 local PRESSED_SIZE = UDim2.fromScale(NODE_SIZE.X.Scale * 0.85, NODE_SIZE.Y.Scale * 0.85)
 local HEADER_SIZE = UDim2.fromScale(0.45, 0.25)
 local ALERT_SIZE = UDim2.fromScale(0.3, 0.3)
-local STROKE_THICKNESS = 0.075
+local STROKE_THICKNESS = 0.14
 
-local GLOW_TRANSPARENCY = 0.35
-local HIGHLIGHT_TRANSPARENCY = 0.4
+local SIZE_SPEED = 19
+local SIZE_DAMPING = 0.58
+local ROTATION_SPEED = 13
+local ROTATION_DAMPING = 0.42
+
+--> the kick given to the size spring as a node lands, and the tilt it unwinds from
+local SPAWN_PUNCH = 2.6
+local SPAWN_TILT = -22
+
+local GLOW_TRANSPARENCY = 1
+local HIGHLIGHT_TRANSPARENCY = 1
 local MAX_NOTIFICATION_COUNT = 9
 
 local NUMBER_SYMBOLS = { "K", "M", "B", "T", "Q" }
@@ -94,8 +73,6 @@ local WHITE = Color3.new(1, 1, 1)
 local BLACK = Color3.new()
 
 export type Color = {
-	-- Background art. It is tinted by `backgroundTint`, so the neutral artwork
-	-- can take any hue without needing its own asset.
 	backgroundImage: string,
 	backgroundTint: Color3,
 	glow: Color3,
@@ -121,8 +98,10 @@ local Colors: { [string]: Color } = {
 		text = WHITE,
 		stroke = Color3.fromRGB(21, 61, 30),
 	},
+	--> the sheet named "blue" in ASSETS is the amber one, so blue is drawn off the plain sheet and
+	--> gold off the amber sheet. named colours now render as their names
 	blue = {
-		backgroundImage = ASSETS.backgroundBlue,
+		backgroundImage = ASSETS.background,
 		backgroundTint = WHITE,
 		glow = Color3.fromRGB(56, 148, 255),
 		icon = WHITE,
@@ -138,16 +117,18 @@ local Colors: { [string]: Color } = {
 		stroke = Color3.fromRGB(44, 16, 82),
 	},
 	gold = {
-		backgroundImage = ASSETS.background,
-		backgroundTint = Color3.fromRGB(255, 199, 61),
+		backgroundImage = ASSETS.backgroundBlue,
+		backgroundTint = WHITE,
 		glow = Color3.fromRGB(255, 162, 22),
 		icon = WHITE,
 		text = WHITE,
 		stroke = Color3.fromRGB(84, 55, 5),
 	},
+	--> the plain background art is a dark blue base that turns almost black under a red tint, so red
+	--> is mixed off the amber sheet instead
 	red = {
-		backgroundImage = ASSETS.background,
-		backgroundTint = Color3.fromRGB(255, 104, 104),
+		backgroundImage = ASSETS.backgroundBlue,
+		backgroundTint = Color3.fromRGB(255, 58, 58),
 		glow = Color3.fromRGB(214, 44, 44),
 		icon = WHITE,
 		text = WHITE,
@@ -204,7 +185,6 @@ local function playTween(
 	return tween
 end
 
---- Shortens a price into something that fits on a node: 100000 -> "100K".
 local function formatLargeNumber(value: number): string
 	local symbol = ""
 	local shiftedValue = value
@@ -226,10 +206,6 @@ local function formatLargeNumber(value: number): string
 	return `{shiftedValue}{symbol}`
 end
 
---[[
-	Creates an instance with the given properties already applied. Returns `any`
-	so the call site can name the class it expects.
---]]
 local function create(className: string, properties: { [string]: any }, parent: Instance?): any
 	local instance = Instance.new(className :: any)
 
@@ -242,10 +218,6 @@ local function create(className: string, properties: { [string]: any }, parent: 
 	return instance
 end
 
---[[
-	Builds one node's instance tree and hands back every instance the class ever
-	touches, so nothing has to be looked up by name again.
---]]
 local function buildNodeInstance(): Instances
 	local node: TextButton = create("TextButton", {
 		Name = "Node",
@@ -260,6 +232,12 @@ local function buildNodeInstance(): Instances
 		TextSize = 14,
 		Visible = false,
 	})
+
+	create("UIAspectRatioConstraint", {
+		Name = "UIAspectRatioConstraint",
+		AspectRatio = 1,
+		DominantAxis = Enum.DominantAxis.Height,
+	}, node)
 
 	local background: Frame = create("Frame", {
 		Name = "Background",
@@ -280,6 +258,8 @@ local function buildNodeInstance(): Instances
 		ZIndex = 2,
 	}, background)
 
+	--> the glow sheets stay in the tree so the colour plumbing keeps working, but they are drawn at
+	--> full transparency: the palettes read cleaner without a halo behind every hex
 	local backgroundGlow: ImageLabel = create("ImageLabel", {
 		Name = "Glow",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -308,8 +288,8 @@ local function buildNodeInstance(): Instances
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		FontFace = PRIMARY_FONT,
-		Position = UDim2.fromScale(0.5, 0.65),
-		Size = UDim2.fromScale(1.5, 0.225),
+		Position = UDim2.fromScale(0.5, 0.62),
+		Size = UDim2.fromScale(1.5, 0.28),
 		Text = "",
 		TextColor3 = WHITE,
 		TextScaled = true,
@@ -326,8 +306,8 @@ local function buildNodeInstance(): Instances
 		Name = "Price",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0.5, 0.85),
-		Size = UDim2.fromScale(1.5, 0.225),
+		Position = UDim2.fromScale(0.5, 0.86),
+		Size = UDim2.fromScale(1.5, 0.26),
 		Visible = false,
 		ZIndex = 3,
 	}, node)
@@ -371,8 +351,6 @@ local function buildNodeInstance(): Instances
 		Thickness = STROKE_THICKNESS,
 	}, priceText)
 
-	-- Notifications: the "NEW!" ribbon and the counter badge. Both start at zero
-	-- size so that showing them pops instead of appearing instantly.
 	local header: Frame = create("Frame", {
 		Name = "HeaderText",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -492,6 +470,8 @@ NodeConstructor.__index = NodeConstructor
 
 NodeConstructor.Colors = Colors
 
+NodeConstructor.NodeSize = NODE_SIZE
+
 NodeConstructor.Direction = {
 	bottom = Vector2.new(0, 2),
 	top = Vector2.new(0, -2),
@@ -505,6 +485,11 @@ export type NodeData = {
 	_parentNode: Node?,
 	_childNodes: { Node },
 	_instances: Instances,
+	_scope: any,
+	_sizeGoal: any,
+	_size: any,
+	_rotationGoal: any,
+	_rotation: any,
 	_config: Config,
 	_color: Color,
 	_colorName: string,
@@ -523,10 +508,21 @@ export type NodeData = {
 export type Node = typeof(setmetatable({} :: NodeData, NodeConstructor))
 
 function NodeConstructor.new(config: Config, parentNode: Node?): Node
+	local scope = Fusion.scoped(Fusion)
+	local instances = buildNodeInstance()
+
+	local sizeGoal = scope:Value(UDim2.new())
+	local rotationGoal = scope:Value(0)
+
 	local nodeData: NodeData = {
 		_parentNode = parentNode,
 		_childNodes = {},
-		_instances = buildNodeInstance(),
+		_instances = instances,
+		_scope = scope,
+		_sizeGoal = sizeGoal,
+		_size = scope:Spring(sizeGoal, SIZE_SPEED, SIZE_DAMPING),
+		_rotationGoal = rotationGoal,
+		_rotation = scope:Spring(rotationGoal, ROTATION_SPEED, ROTATION_DAMPING),
 		_config = config,
 		_color = Colors.default,
 		_colorName = "default",
@@ -540,6 +536,11 @@ function NodeConstructor.new(config: Config, parentNode: Node?): Node
 	}
 
 	local self = setmetatable(nodeData, NodeConstructor)
+
+	scope:Hydrate(instances.node)({
+		Size = self._size,
+		Rotation = self._rotation,
+	})
 
 	self._pressedConnection = self._instances.node.Activated:Connect(function()
 		if self._pressedCallback then
@@ -561,9 +562,6 @@ function NodeConstructor.new(config: Config, parentNode: Node?): Node
 		table.insert(parentNode._childNodes, self)
 	end
 
-	-- Nodes are built hidden. Whoever owns the tree decides when they pop in.
-	self._instances.node.Size = UDim2.new()
-
 	return self
 end
 
@@ -578,10 +576,6 @@ end
 function NodeConstructor.setParent(self: Node, parent: GuiBase2d)
 	self._instances.node.Parent = parent
 end
-
---[[
-	Contents
---]]
 
 function NodeConstructor.setIcon(self: Node, icon: string)
 	self._instances.icon.Image = icon
@@ -599,7 +593,6 @@ function NodeConstructor.setPriceCurrencyIcon(self: Node, icon: string)
 	self._instances.currencyIcon.Image = icon
 end
 
---- Passing nil hides the price row entirely.
 function NodeConstructor.setPrice(self: Node, price: Price?)
 	if not price then
 		self._instances.price.Visible = false
@@ -613,15 +606,9 @@ function NodeConstructor.setPrice(self: Node, price: Price?)
 	self._instances.price.Visible = true
 end
 
---[[
-	Colour
---]]
-
 function NodeConstructor._applyColor(self: Node, color: Color)
 	local instances = self._instances
 
-	-- A config supplied background icon always wins over the palette's, so a
-	-- one-off node can keep its own artwork while still being recoloured.
 	instances.backgroundIcon.Image = self._backgroundIconOverride or color.backgroundImage
 	instances.backgroundIcon.ImageColor3 = color.backgroundTint
 	instances.backgroundGlow.ImageColor3 = color.glow
@@ -631,12 +618,8 @@ function NodeConstructor._applyColor(self: Node, color: Color)
 	instances.priceText.TextColor3 = color.text
 	instances.primaryTextStroke.Color = color.stroke
 	instances.priceTextStroke.Color = color.stroke
-
-	-- Notifications deliberately keep their own colours so they read the same on
-	-- every node.
 end
 
---- Accepts a name from NodeConstructor.Colors, or a palette of your own.
 function NodeConstructor.setColor(self: Node, color: string | Color)
 	local palette: Color
 	local colorName = "custom"
@@ -666,7 +649,6 @@ function NodeConstructor.getColorName(self: Node): string
 	return self._colorName
 end
 
---- Greys the node out without forgetting the colour it goes back to.
 function NodeConstructor.setIsLocked(self: Node, isLocked: boolean)
 	if self._locked == isLocked then
 		return
@@ -685,7 +667,6 @@ function NodeConstructor.setBackgroundIcon(self: Node, icon: string?)
 	self:_applyColor(if self._locked then Colors.locked else self._color)
 end
 
---- Fades the outer glow in, tinted by the node's colour. Good for "affordable".
 function NodeConstructor.setIsHighlighted(self: Node, isHighlighted: boolean)
 	if self._highlighted == isHighlighted then
 		return
@@ -695,7 +676,7 @@ function NodeConstructor.setIsHighlighted(self: Node, isHighlighted: boolean)
 
 	local highlightGlow = self._instances.highlightGlow
 	if isHighlighted then
-		highlightGlow.Visible = true
+		highlightGlow.Visible = HIGHLIGHT_TRANSPARENCY < 1
 		playTween(highlightGlow, { ImageTransparency = HIGHLIGHT_TRANSPARENCY }, 0.25, Enum.EasingStyle.Quad)
 		return
 	end
@@ -711,10 +692,6 @@ end
 function NodeConstructor.isHighlighted(self: Node): boolean
 	return self._highlighted
 end
-
---[[
-	Notifications
---]]
 
 function NodeConstructor.setHeaderTextIsVisible(self: Node, isVisible: boolean)
 	local header = self._instances.header
@@ -733,7 +710,6 @@ function NodeConstructor.setHeaderTextIsVisible(self: Node, isVisible: boolean)
 	end)
 end
 
---- The ribbon above the node ("NEW!"). Passing nil takes it away.
 function NodeConstructor.setHeaderText(self: Node, text: string?)
 	if not text then
 		self:setHeaderTextIsVisible(false)
@@ -764,14 +740,12 @@ function NodeConstructor.setIsAlertVisible(self: Node, isVisible: boolean)
 
 	local hideTween = playTween(alert, { Size = UDim2.new() }, 0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In)
 	hideTween.Completed:Once(function(playbackState: Enum.PlaybackState)
-		-- Guarded, in case the badge came back while it was shrinking.
 		if playbackState == Enum.PlaybackState.Completed and not self._alertVisible then
 			alert.Visible = false
 		end
 	end)
 end
 
---- The badge on the corner of the node. Passing nil clears it.
 function NodeConstructor.setNotification(self: Node, text: string?)
 	if not text then
 		self:setIsAlertVisible(false)
@@ -782,7 +756,6 @@ function NodeConstructor.setNotification(self: Node, text: string?)
 	self:setIsAlertVisible(true)
 end
 
---- Counts above MAX_NOTIFICATION_COUNT show as "9+", zero clears the badge.
 function NodeConstructor.setNotificationCount(self: Node, count: number)
 	if count <= 0 then
 		self:setNotification(nil)
@@ -797,10 +770,6 @@ function NodeConstructor.isNotifying(self: Node): boolean
 	return self._alertVisible
 end
 
---[[
-	Placement
---]]
-
 function NodeConstructor.getPosition(self: Node): UDim2
 	return self._instances.node.Position
 end
@@ -809,7 +778,6 @@ function NodeConstructor.setPosition(self: Node, position: UDim2)
 	self._instances.node.Position = position
 end
 
---- Where a child sitting in `direction` from this node belongs.
 function NodeConstructor.getChildPosition(self: Node, direction: Vector2): UDim2
 	local offset =
 		UDim2.fromScale(HALF_NODE_SIZE.X.Scale * math.sqrt(3) * direction.X, HALF_NODE_SIZE.Y.Scale * direction.Y)
@@ -834,7 +802,6 @@ function NodeConstructor.getChildNodes(self: Node): { Node }
 	return self._childNodes
 end
 
---- Runs the callback on this node and every node underneath it.
 function NodeConstructor.eachNode(self: Node, callback: (Node) -> ())
 	callback(self)
 
@@ -855,10 +822,6 @@ function NodeConstructor.getDepth(self: Node): number
 	return depth
 end
 
---[[
-	Input
---]]
-
 function NodeConstructor._setHovered(self: Node, isHovered: boolean)
 	if self._hovering == isHovered then
 		return
@@ -866,20 +829,10 @@ function NodeConstructor._setHovered(self: Node, isHovered: boolean)
 
 	self._hovering = isHovered
 
-	local node = self._instances.node
 	if isHovered then
-		-- Hovering a node that is still popping in reads better with a slower,
-		-- springier tween than the usual snap.
-		local time = 0.1
-		local style = Enum.EasingStyle.Quad
-		if node.Size.X.Scale < NODE_SIZE.X.Scale then
-			time = 0.4
-			style = Enum.EasingStyle.Back
-		end
-
-		playTween(node, { Size = HOVERED_SIZE }, time, style)
+		self._sizeGoal:set(HOVERED_SIZE)
 	elseif not self._pressing then
-		playTween(node, { Size = NODE_SIZE }, 0.25, Enum.EasingStyle.Sine)
+		self._sizeGoal:set(NODE_SIZE)
 	end
 end
 
@@ -890,12 +843,15 @@ function NodeConstructor._setPressed(self: Node, isPressed: boolean)
 
 	self._pressing = isPressed
 
-	local node = self._instances.node
 	if isPressed then
-		playTween(node, { Size = PRESSED_SIZE }, 0.1, Enum.EasingStyle.Exponential)
-	else
-		playTween(node, { Size = if self._hovering then HOVERED_SIZE else NODE_SIZE }, 0.25, Enum.EasingStyle.Sine)
+		self._sizeGoal:set(PRESSED_SIZE)
+		return
 	end
+
+	self._sizeGoal:set(if self._hovering then HOVERED_SIZE else NODE_SIZE)
+
+	--> a release pushes back out rather than easing, so a tap feels like it snaps
+	self._size:addVelocity(UDim2.fromScale(SPAWN_PUNCH / 2, SPAWN_PUNCH / 2))
 end
 
 function NodeConstructor._disableInput(self: Node)
@@ -939,20 +895,14 @@ function NodeConstructor._enableInput(self: Node)
 	)
 end
 
---- Replaces the previous callback rather than stacking another connection.
 function NodeConstructor.setPressedCallback(self: Node, callback: PressedCallback?)
 	self._pressedCallback = callback
 end
-
---[[
-	Visibility
---]]
 
 function NodeConstructor.isVisible(self: Node): boolean
 	return self._visible
 end
 
---- `optionalDelay` staggers the pop, which is how a branch opens outwards.
 function NodeConstructor.setIsVisible(self: Node, isVisible: boolean, optionalDelay: number?)
 	local delay = optionalDelay or 0
 
@@ -960,24 +910,31 @@ function NodeConstructor.setIsVisible(self: Node, isVisible: boolean, optionalDe
 
 	local node = self._instances.node
 	if isVisible then
-		self:_enableInput()
+		task.delay(delay, function()
+			if not self._visible then
+				return
+			end
 
-		if delay > 0 then
-			node.Size = UDim2.new()
-		end
-		playTween(node, { Size = NODE_SIZE }, 0.4, Enum.EasingStyle.Back, nil, delay)
+			self:_enableInput()
 
-		node.Visible = true
+			node.Visible = true
+
+			--> lands with a kick and unwinds the tilt, so nodes pop in rather than fade up
+			self._sizeGoal:set(NODE_SIZE)
+			self._size:addVelocity(UDim2.fromScale(SPAWN_PUNCH, SPAWN_PUNCH))
+			self._rotation:setPosition(SPAWN_TILT)
+		end)
+
 		return
 	end
 
 	self:_disableInput()
 	self:_setPressed(false)
 	self:_setHovered(false)
+	self._sizeGoal:set(UDim2.new())
 
-	local hideTween = playTween(node, { Size = UDim2.new() }, 0.2, Enum.EasingStyle.Quint)
-	hideTween.Completed:Once(function(playbackState: Enum.PlaybackState)
-		if playbackState == Enum.PlaybackState.Completed and not self._visible then
+	task.delay(0.35, function()
+		if not self._visible then
 			node.Visible = false
 		end
 	end)
@@ -985,6 +942,7 @@ end
 
 function NodeConstructor.destroy(self: Node)
 	self:_disableInput()
+	Fusion.doCleanup(self._scope)
 
 	if self._pressedConnection then
 		self._pressedConnection:Disconnect()
