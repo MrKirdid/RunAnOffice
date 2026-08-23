@@ -31,8 +31,7 @@ function PlotController:HandleRollPads()
 
 	UpdatePads(PlayerData.RerollPads())
 
-	--> Changed is a plain field holding the subscribe function, so a colon here would hand it
-	--> the Value as the callback and drop the real one on the floor.
+	--> Changed is a field, not a method: a colon here drops the callback.
 	PlayerData.RerollPads.Changed(function(NewAmount: number)
 		UpdatePads(NewAmount)
 	end)

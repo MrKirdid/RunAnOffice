@@ -149,17 +149,24 @@ local Queue: any = {
 }
 
 export type Player = Player
+export type Employees_UID = number
+export type Employees_Position = Vector3
+export type Employees_Spawn = { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? }
 
 
 
 return {
 	Plot = {
 	},
+	Items = {
+	},
 	Stealing = {
 	},
 	Purchases = {
 	},
 	NPCs = {
+	},
+	Employees = {
 	},
 
 }

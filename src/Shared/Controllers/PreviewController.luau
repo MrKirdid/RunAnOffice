@@ -1,6 +1,3 @@
---> A viewport window for looking at one component model up close, without hunting for it in
---> a plot or building the whole showcase. Driven by the previewmodel command.
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -16,7 +13,7 @@ local Parts = require(Assets:WaitForChild("Parts"))
 local GuiName = "ModelPreview"
 
 local FieldOfView = 40
-local Framing = 1.35 --> how much room to leave around the model
+local Framing = 1.35
 local SpinSpeed = math.rad(50)
 local Pitch = math.rad(18)
 
@@ -36,7 +33,6 @@ local function Round(Parent: Instance, Radius: number)
 	Corner.Parent = Parent
 end
 
---> "1 in 667" reads better than a percentage this far out on the tail
 local function OddsText(Variant: string): string
 	local Entry = PartConfigs.Variants[Variant]
 
@@ -44,7 +40,6 @@ local function OddsText(Variant: string): string
 		return ""
 	end
 
-	--> Luck 0 leaves the rare end with no weight at all, which has no "1 in N" to print
 	local function Odds(Chance: number): string
 		return if Chance > 0 then `1 in {math.floor(1 / Chance + 0.5)}` else "never"
 	end
@@ -146,7 +141,6 @@ function PreviewController:Close()
 		self.Connection = nil
 	end
 
-	--> Also sweeps a window left behind by a reload, which the field alone would not know about
 	local PlayerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
 	local Existing = self.Gui or (PlayerGui and PlayerGui:FindFirstChild(GuiName))
 
@@ -157,7 +151,6 @@ function PreviewController:Close()
 	self.Gui = nil
 end
 
---> Returns false plus a reason instead of erroring, so the command can report it as output.
 function PreviewController:Show(Component: string, Variant: string): (boolean, string?)
 	local Loaded, Model = pcall(Parts, Component, Variant)
 
@@ -169,8 +162,6 @@ function PreviewController:Show(Component: string, Variant: string): (boolean, s
 
 	local Gui, Viewport = BuildGui(`{Variant} {Component}`, OddsText(Variant))
 
-	--> A WorldModel keeps the parts laid out the way the asset has them instead of stacking
-	--> everything on the viewport's origin.
 	local World = Instance.new("WorldModel")
 	World.Parent = Viewport
 
@@ -227,7 +218,6 @@ function PreviewController:Show(Component: string, Variant: string): (boolean, s
 	end)
 
 	self.Connection = RunService.RenderStepped:Connect(function(Delta: number)
-		--> Spinning stops while a drag is in progress so the model does not fight the cursor
 		if not Dragging then
 			Yaw += SpinSpeed * Delta
 		end

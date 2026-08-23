@@ -26,10 +26,11 @@ local WheelStep = 1.15
 --> a press that travels further than this is a pan, not a click on a node
 local DragThreshold = 12
 
-local PanSpeed = 32
-local PanDamping = 1
-local ZoomSpeed = 18
-local ZoomDamping = 0.85
+--> the centre and the zoom have to share their spring settings. the centre a zoom aims for is a
+--> linear function of the zoom, so two springs with identical dynamics stay in step and the point
+--> under the cursor holds still the whole way; different speeds slide it around mid-animation.
+local ViewSpeed = 28
+local ViewDamping = 1
 
 --> how far a flick keeps travelling after the finger leaves, in seconds of its last speed
 local GlideTime = 0.22
@@ -90,9 +91,9 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 	end
 
 	local ZoomGoal = Scope:Value(1)
-	local ZoomSpring = Scope:Spring(ZoomGoal, ZoomSpeed, ZoomDamping)
+	local ZoomSpring = Scope:Spring(ZoomGoal, ViewSpeed, ViewDamping)
 	local CenterGoal = Scope:Value(GetWindowCenter())
-	local CenterSpring = Scope:Spring(CenterGoal, PanSpeed, PanDamping)
+	local CenterSpring = Scope:Spring(CenterGoal, ViewSpeed, ViewDamping)
 
 	--> a screen that ignores the inset shares its coordinates with the mouse; one that does not is
 	--> pushed down by the top bar and has to be corrected for

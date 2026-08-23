@@ -1,7 +1,3 @@
---> Standalone showcase: builds every Variant/Component model out at DemoOrigin with a
---> billboard render floating over each one. Nothing builds it on startup, it goes up on
---> demand through the `partsdemo` console command.
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -14,7 +10,6 @@ local PartConfigs = require(Shared.Configs.Parts)
 local DemoOrigin = Vector3.new(0, 1000, 0)
 local DemoName = "PartsDemo"
 
---> Cheapest to priciest, so each row reads left to right as a value ramp.
 local ComponentOrder = { "Keyboard", "Monitor", "Computer" }
 
 local VariantsPerRow = 4
@@ -53,8 +48,6 @@ local function GetPartsModule(): (string, string) -> Model
 	return PartsModule :: any
 end
 
---> Renders keys are the source of truth for what gets shown, ordered by variant value so
---> the grid walks from common to rare.
 local function GetVariantOrder(): { string }
 	local Variants = {}
 
@@ -95,7 +88,7 @@ local function BuildBillboard(Adornee: BasePart, Image: string, Label: string, H
 	local Billboard = Instance.new("BillboardGui")
 	Billboard.Name = "Render"
 	Billboard.Size = UDim2.fromScale(BillboardStuds, BillboardStuds * 1.2)
-	Billboard.SizeOffset = Vector2.new(0, 0.5) --> sit fully above the offset point
+	Billboard.SizeOffset = Vector2.new(0, 0.5)
 	Billboard.StudsOffsetWorldSpace = Vector3.new(0, Height + BillboardGap, 0)
 	Billboard.MaxDistance = BillboardMaxDistance
 	Billboard.LightInfluence = 0
@@ -138,7 +131,6 @@ local function BuildFloor(Width: number, Depth: number, Parent: Instance)
 	Floor.Parent = Parent
 end
 
---> Drops the model so its bounding-box bottom lands on Position, orientation untouched.
 local function PlaceOnGround(Model: Model, Position: Vector3): number
 	local BoxCFrame, BoxSize = Model:GetBoundingBox()
 	local BottomCenter = BoxCFrame.Position - Vector3.new(0, BoxSize.Y / 2, 0)
@@ -231,7 +223,6 @@ function PartsDemoController:Build(): Model
 	return Container
 end
 
---> Convenience for poking at it in Studio, drops you on the demo floor.
 function PartsDemoController:Teleport()
 	local Character = Players.LocalPlayer.Character
 	if not Character then

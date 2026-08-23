@@ -1,6 +1,3 @@
---> Registered on the client, not the server: the whole point is a viewport on the caller's
---> own screen, so there is nothing for the server to do.
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")

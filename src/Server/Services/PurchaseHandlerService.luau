@@ -30,9 +30,6 @@ function PurchaseHandlerService:Start()
 
 		local Data = PlayerData[Player]
 
-		--> Buying the desk rolls the three components that sit on it, at whatever luck the
-		--> player is carrying. Writing the key replicates, which is what tells the client to
-		--> spawn it and play the roll.
 		Data.Floors[Floor].Desks[Slot](Rolling.RollDesk(Data.Luck()))
 	end)
 end

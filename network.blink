@@ -15,11 +15,11 @@ function Roll {
 	Data: u8(1..17),
 	Return: struct {
 		Player: Player,
-		-- [slot 0-16]: the desk rolled into that slot, one variant per component
+		-- [slot 0-16]: what landed on that roll pad. Rolling.RollOne builds these, one component
+		-- paired with the variant it rolled at, which is what the pads and pickup both read.
 		Results: map { [u8(0..16)]: struct {
-			Computer: string(1..20),
-			Keyboard: string(1..20),
-			Monitor: string(1..20)
+			Component: string(1..20),
+			Variant: string(1..20)
 		} }
 	}
 }
@@ -38,6 +38,38 @@ scope Plot {
 	}
 }
 
+scope Items {
+	function PickUp {
+		Yield: Promise,
+		-- the roll pad being picked up off, same 0-16 slot space the roll results use
+		Data: u8(0..16),
+		Return: struct {
+			Component: string(1..20),
+			Variant: string(1..20)
+		}
+	}
+
+	function Replace {
+		Yield: Promise,
+		-- the desk slot the held part is being swapped onto
+		Data: struct {
+			Floor: u8(1..16),
+			Slot: u8(1..16)
+		},
+		Return: struct {
+			Component: string(1..20),
+			Variant: string(1..20)
+		}
+	}
+
+	-- cancels a pickup: the held part is given up rather than placed, so it goes nowhere. False if
+	-- there was nothing in hand to begin with.
+	function Drop {
+		Yield: Promise,
+		Return: boolean
+	}
+}
+
 scope Stealing {
 
 }
@@ -52,4 +84,62 @@ scope Purchases {
 
 scope NPCs {
 
+}
+
+scope Employees {
+	type UID = u32
+	type Position = vector
+	struct Spawn {
+		UID: UID,
+		Name: string(1..20),
+		Type: string(1..20),
+		Cost: u32,
+		Position: Position,
+		Owner: Player?
+	}
+
+	function GetAll {
+		Yield: Promise,
+		Return: Spawn[0..2000]
+	}
+
+	event Added {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: Spawn[1..255]
+	}
+
+	event Moved {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: struct {
+			UID: UID,
+			Position: Position
+		}[1..255]
+	}
+
+	event Removed {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: UID[1..255]
+	}
+
+	event OwnerChanged {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: struct {
+			UID: UID,
+			Owner: Player?
+		}[1..255]
+	}
+
+	function Buy {
+		Yield: Promise,
+		Data: UID,
+		Return: boolean
+	}
 }

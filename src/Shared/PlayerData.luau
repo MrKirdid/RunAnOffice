@@ -5,22 +5,32 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local IsStudio = RunService:IsStudio()
 local Dataservicetyped = require(Shared.Packages.Dataservicetyped)
 
+type Employee = {
+	Name: string,
+	Type: string,
+}
+
+--> One seat per desk. Employee is nil until one walks over and sits down, and it is the only
+--> record that they exist: nothing tracks employees separately once they are seated.
 type Desk = {
 	Computer: string,
 	Keyboard: string,
 	Monitor: string,
+	Employee: Employee?,
 }
 
 local Config = {
 	PlayerData = {
-		Cash = 200, -- Starting amount, subject to change but I think it should be enough for tutorial
+		Cash = 200,
 		Rebirths = 0,
 
-		Luck = 1, -- Multiplier on the roll odds. 1 is the plain table, 2 doubles the rarest chance
+		Luck = 1, -- 1 is the plain table, 2 doubles the rarest chance
 
 		RerollPads = 9,
 
-		Employees = {} :: { [number]: { desk: { Floor: number, Desk: number }, EmployeeType: string } },
+		Pads = {} :: { [number]: { Component: string, Variant: string } },
+
+		Holding = {} :: { Component: string?, Variant: string? },
 
 		Floors = {
 			[1] = {
@@ -48,8 +58,6 @@ local Config = {
 			SFX = true,
 		},
 	},
-
-	--- -- --- -- --- -- ---
 
 	UseMock = false,
 	ViewUserId = nil,

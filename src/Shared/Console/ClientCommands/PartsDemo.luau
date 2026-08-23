@@ -1,6 +1,3 @@
---> Registered on the client, not the server: the showcase is a local build, not a real part
---> of anyone's plot.
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")

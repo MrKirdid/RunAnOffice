@@ -19,8 +19,6 @@ function KmdrService:IsAdmin(Player: Player): boolean
 		return true
 	end
 
-	--> A group owned place reports the group id here, so only a user owned one has a creator
-	--> that maps onto a player.
 	return game.CreatorType == Enum.CreatorType.User and Player.UserId == game.CreatorId
 end
 
@@ -35,12 +33,9 @@ function KmdrService:Init()
 	Console.registerDefaults()
 	Console.registerFolder(Server.Commands)
 
-	--> Kmdr blocks every command outside Studio until a guard exists, so this is both the
-	--> permission check and the switch that turns the console on at all.
 	Console.addGuard(function(Context)
 		local Executor = Context.executor
 
-		--> No executor means the server ran it itself, which is already trusted
 		if Executor and not self:IsAdmin(Executor) then
 			return "You do not have permission to run commands here."
 		end

@@ -12,8 +12,6 @@ type Weights = { Names: { string }, Total: number, Scarcity: { [string]: number 
 
 local Default = Random.new()
 
---> Dictionary iteration order is an implementation detail, so the pick order is frozen
---> once per entry table. That also saves resumming the weights on every roll.
 local function Weigh(Entries: Entries): Weights
 	local Names = {}
 	for Name in Entries do
@@ -37,10 +35,6 @@ local function Weigh(Entries: Entries): Weights
 		Rarest = math.min(Rarest, Rarity)
 	end
 
-	--> Scarcity runs from 0 for the commonest entry to 1 for the rarest, on a log scale so
-	--> the tiers in between sit evenly apart. Luck is raised to it, which means luck 2
-	--> doubles the rarest entry's weight, leaves the commonest alone, and slides everything
-	--> between the two in proportion to how rare it already was.
 	local Span = math.log(Commonest / Rarest)
 	local Scarcity = {}
 
@@ -51,7 +45,8 @@ local function Weigh(Entries: Entries): Weights
 	return { Names = Names, Total = Total, Scarcity = Scarcity }
 end
 
-local Cache: { [Entries]: Weights } = {}
+--> Weak keyed: callers pass filtered tables that would otherwise pile up here per roll.
+local Cache: { [Entries]: Weights } = setmetatable({}, { __mode = "k" }) :: any
 
 local function GetWeights(Entries: Entries): Weights
 	local Cached = Cache[Entries]
@@ -63,23 +58,18 @@ local function GetWeights(Entries: Entries): Weights
 	return Cached
 end
 
---> Negative luck would raise a negative base to a fractional power and hand back NaN, so the
---> floor is clamped instead of trusted. Luck 0 collapses the table onto its commonest entry.
 local function Clamp(Luck: number?): number
 	return if Luck then math.max(Luck, 0) else 1
 end
 
 local Rolling = {}
 
---> Generator is optional so the caller can pass a seeded Random and have both sides
---> land on the same result. Left out, each context rolls off its own stream.
 function Rolling.Pick(Entries: Entries, Luck: number?, Generator: Random?): string
 	local Weights = GetWeights(Entries)
 	local Names = Weights.Names
 	local Stream = Generator or Default
 	local Effective = Clamp(Luck)
 
-	--> Plain luck is the common case and skips the reweighting entirely
 	if Effective == 1 then
 		local Roll = Stream:NextNumber() * Weights.Total
 
@@ -90,7 +80,6 @@ function Rolling.Pick(Entries: Entries, Luck: number?, Generator: Random?): stri
 			end
 		end
 
-		--> Floating point drift can leave Roll a hair above zero after the last subtraction
 		return Names[#Names]
 	end
 
@@ -113,7 +102,6 @@ function Rolling.Pick(Entries: Entries, Luck: number?, Generator: Random?): stri
 	return Names[#Names]
 end
 
---> The odds each entry actually lands on at a given luck, for readouts and tuning.
 function Rolling.Chances(Entries: Entries, Luck: number?): { [string]: number }
 	local Weights = GetWeights(Entries)
 	local Scarcity = Weights.Scarcity
@@ -143,13 +131,14 @@ function Rolling.RollOne(Luck: number?, Generator: Random?): Result
 	}
 end
 
---> Just the variant, for blur frames that already know which component they are showing.
 function Rolling.RollVariant(Luck: number?, Generator: Random?): string
 	return Rolling.Pick(Parts.Variants, Luck, Generator)
 end
 
---> A roll fills a whole desk, so each of the three components draws its own variant.
---> The component itself is no longer picked, only how good each one turns out.
+function Rolling.RollComponent(Luck: number?, Generator: Random?): string
+	return Rolling.Pick(Parts.BaseValues, Luck, Generator)
+end
+
 function Rolling.RollDesk(Luck: number?, Generator: Random?): Desk
 	return {
 		Computer = Rolling.Pick(Parts.Variants, Luck, Generator),
@@ -158,11 +147,10 @@ function Rolling.RollDesk(Luck: number?, Generator: Random?): Desk
 	}
 end
 
---> Slots are zero based to match the networked map, which is keyed [0..16].
-function Rolling.Roll(Count: number, Luck: number?, Generator: Random?): { [number]: Desk }
+function Rolling.Roll(Count: number, Luck: number?, Generator: Random?): { [number]: Result }
 	local Results = {}
 	for Slot = 0, Count - 1 do
-		Results[Slot] = Rolling.RollDesk(Luck, Generator)
+		Results[Slot] = Rolling.RollOne(Luck, Generator)
 	end
 
 	return Results

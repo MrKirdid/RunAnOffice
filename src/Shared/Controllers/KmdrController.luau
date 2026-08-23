@@ -16,8 +16,6 @@ function KmdrController:Init()
 
 	self.Console = Console
 
-	--> The server only syncs each command's metadata, so the client has to hold the same
-	--> argument types itself or it cannot check or suggest them while you are typing.
 	for _, Handle in ConsoleTypes do
 		Console.registerType(Handle)
 	end

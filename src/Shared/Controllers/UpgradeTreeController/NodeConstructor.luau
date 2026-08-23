@@ -42,21 +42,37 @@ local ASSETS = {
 	alertBackground = "rbxassetid://120266911736999",
 }
 
-local BUTTON_FONT = Font.new("rbxassetid://16658221428")
-local PRIMARY_FONT = Font.new("rbxassetid://11702779409", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
-local HEADER_FONT = Font.new("rbxassetid://11702779409", Enum.FontWeight.Bold, Enum.FontStyle.Italic)
+--> the display face the rest of the game is set in. the ids this used to carry were condensed
+--> and appeared nowhere else, which is what made the tree read as foreign
+local DISPLAY_FONT = "rbxassetid://11598289817"
+
+local BUTTON_FONT = Font.new(DISPLAY_FONT, Enum.FontWeight.Heavy, Enum.FontStyle.Normal)
+local PRIMARY_FONT = Font.new(DISPLAY_FONT, Enum.FontWeight.Heavy, Enum.FontStyle.Normal)
+local HEADER_FONT = Font.new(DISPLAY_FONT, Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
 
 local NODE_SIZE = UDim2.fromScale(0.09, 0.09)
 local HALF_NODE_SIZE = UDim2.fromScale(NODE_SIZE.X.Scale / 2, NODE_SIZE.Y.Scale / 2)
 local HOVERED_SIZE = UDim2.fromScale(NODE_SIZE.X.Scale * 1.15, NODE_SIZE.Y.Scale * 1.15)
 local PRESSED_SIZE = UDim2.fromScale(NODE_SIZE.X.Scale * 0.85, NODE_SIZE.Y.Scale * 0.85)
+--> the hex is the frame, so the icon sits in the upper half and the name and price stack under it,
+--> all inside the silhouette. widths are what fits the hex at that height, not the node's box.
+--> the label is deliberately small: the icon carries the node and the name only labels it
+local ICON_CENTER = 0.37
+local ICON_SIZE = 0.62
+local LABEL_CENTER = 0.72
+local LABEL_WIDTH = 0.92
+local LABEL_HEIGHT = 0.16
+local PRICE_CENTER = 0.88
+local PRICE_WIDTH = 0.7
+local PRICE_HEIGHT = 0.14
+
 local HEADER_SIZE = UDim2.fromScale(0.45, 0.25)
 local ALERT_SIZE = UDim2.fromScale(0.3, 0.3)
 local STROKE_THICKNESS = 0.14
 
-local SIZE_SPEED = 19
+local SIZE_SPEED = 30
 local SIZE_DAMPING = 0.58
-local ROTATION_SPEED = 13
+local ROTATION_SPEED = 20
 local ROTATION_DAMPING = 0.42
 
 --> the kick given to the size spring as a node lands, and the tilt it unwinds from
@@ -277,9 +293,9 @@ local function buildNodeInstance(): Instances
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Image = ASSETS.nodeIcon,
-		Position = UDim2.fromScale(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, ICON_CENTER),
 		ScaleType = Enum.ScaleType.Fit,
-		Size = UDim2.fromScale(0.6, 0.6),
+		Size = UDim2.fromScale(ICON_SIZE, ICON_SIZE),
 		ZIndex = 2,
 	}, node)
 
@@ -288,8 +304,8 @@ local function buildNodeInstance(): Instances
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		FontFace = PRIMARY_FONT,
-		Position = UDim2.fromScale(0.5, 0.62),
-		Size = UDim2.fromScale(1.5, 0.28),
+		Position = UDim2.fromScale(0.5, LABEL_CENTER),
+		Size = UDim2.fromScale(LABEL_WIDTH, LABEL_HEIGHT),
 		Text = "",
 		TextColor3 = WHITE,
 		TextScaled = true,
@@ -306,8 +322,8 @@ local function buildNodeInstance(): Instances
 		Name = "Price",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
-		Position = UDim2.fromScale(0.5, 0.86),
-		Size = UDim2.fromScale(1.5, 0.26),
+		Position = UDim2.fromScale(0.5, PRICE_CENTER),
+		Size = UDim2.fromScale(PRICE_WIDTH, PRICE_HEIGHT),
 		Visible = false,
 		ZIndex = 3,
 	}, node)
@@ -590,7 +606,13 @@ function NodeConstructor.setPriceText(self: Node, text: string)
 end
 
 function NodeConstructor.setPriceCurrencyIcon(self: Node, icon: string)
-	self._instances.currencyIcon.Image = icon
+	local currencyIcon = self._instances.currencyIcon
+
+	currencyIcon.Image = icon
+
+	--> Configs.Upgrades has no cash icon picked yet, and an empty one still claimed its slot in the
+	--> list layout, leaving the amount sitting off to one side of the hex
+	currencyIcon.Visible = icon ~= ""
 end
 
 function NodeConstructor.setPrice(self: Node, price: Price?)

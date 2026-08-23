@@ -14,10 +14,11 @@ local Scope = Fusion.scoped(Fusion)
 local GuiName = "UpgradeTree"
 local DefaultIcon = "rbxassetid://100568518943004"
 --> how far apart, in seconds, each ring of the tree lands
-local RevealStep = 0.11
+local RevealStep = 0.075
 
---> centre to centre, as a multiple of a node's height. at 1 the hexes sit edge to edge
-local NodeSpacing = 1.02
+--> centre to centre, as a multiple of a node's height. the hex art only fills about nine tenths of
+--> its square box, so edge to edge is 0.9 and this leaves the thin dark gap the reference tree has
+local NodeSpacing = 1.08
 
 local Diagonal = math.sqrt(3) / 2
 
@@ -29,6 +30,11 @@ local Directions = {
 	TopRight = Vector2.new(Diagonal, -0.5),
 	BottomLeft = Vector2.new(-Diagonal, 0.5),
 	BottomRight = Vector2.new(Diagonal, 0.5),
+
+	--> not neighbours: a hex has no side facing straight left or right, so the nearest cell that way
+	--> is two columns across. nodes placed like this sit level with their parent with a gap between
+	Left = Vector2.new(-2 * Diagonal, 0),
+	Right = Vector2.new(2 * Diagonal, 0),
 }
 
 type Upgrade = Upgrades.Upgrade

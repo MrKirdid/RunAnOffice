@@ -15,7 +15,7 @@ local Types = Kmdr.types
 
 --> Picks the slot to fill and says why it could not, so the caller gets a reason per player
 --> instead of one silent failure for the whole command.
-local function ResolveSlot(Data, Plot: Model, Floor: number?, Slot: number?): (number?, number?, string?)
+local function ResolveSlot(Data: any, Plot: Model, Floor: number?, Slot: number?): (number?, number?, string?)
 	if not Floor then
 		local NextFloor, NextSlot = DeskData.GetNextAvailable(Data, Plot)
 
@@ -38,7 +38,7 @@ local function ResolveSlot(Data, Plot: Model, Floor: number?, Slot: number?): (n
 		end
 
 		if DeskData.Get(Data, Floor, Slot) then
-			return nil, nil, `floor {Floor} slot {Slot} is taken, deletedesk it first`
+			return nil, nil, `floor {Floor} slot {Slot} is taken, remove it first`
 		end
 
 		return Floor, Slot
@@ -56,15 +56,17 @@ local function ResolveSlot(Data, Plot: Model, Floor: number?, Slot: number?): (n
 end
 
 local Definition = Kmdr.defineCommand({
-	name = "givedesk",
-	description = "Drops a desk into a player's plot. Rolls it like a purchase unless a variant is named, "
-		.. "and takes the next free slot unless a floor and slot are.",
+	name = "desk",
+	description = "give drops a desk into a plot, rolling its three parts like a purchase unless a "
+		.. "variant is named, and taking the next free slot unless a floor and slot are. remove clears "
+		.. "one slot, freeing it to be bought again. Leave floor and slot out to let it pick.",
 	group = "admin",
 	args = {
-		Targets = Types.players("The players to hand a desk to"),
-		Variant = ConsoleTypes.Variant("Force all three components to this variant instead of rolling"):optional(),
-		Floor = Types.integer("Which floor, unlocked on the spot if they have not reached it"):optional(),
-		Slot = Types.integer("Which desk slot on that floor"):optional(),
+		Action = ConsoleTypes.DeskAction("give a desk or remove one"),
+		Targets = Types.players("Whose plot to work on"),
+		Floor = Types.integer("Which floor. Picked for you when left out"):optional(),
+		Slot = Types.integer("Which desk slot on that floor. Picked for you when left out"):optional(),
+		Variant = ConsoleTypes.Variant("give only: force all three parts to this variant"):optional(),
 	},
 })
 
@@ -82,6 +84,26 @@ return Kmdr.implement(Definition, function(_Context, Args)
 
 		if not Plot then
 			table.insert(Lines, `{Target.Name}: no plot.`)
+			continue
+		end
+
+		if Args.Action == "remove" then
+			if not Args.Floor or not Args.Slot then
+				table.insert(Lines, `{Target.Name}: remove needs both a floor and a slot.`)
+				continue
+			end
+
+			local Desk = DeskData.Get(Data, Args.Floor, Args.Slot)
+
+			if not Desk then
+				table.insert(Lines, `{Target.Name}: floor {Args.Floor} slot {Args.Slot} is already empty.`)
+				continue
+			end
+
+			--> Clearing the key replicates as a removal, which is what tears down the model
+			Desk(nil)
+
+			table.insert(Lines, `{Target.Name}: cleared floor {Args.Floor} slot {Args.Slot}.`)
 			continue
 		end
 

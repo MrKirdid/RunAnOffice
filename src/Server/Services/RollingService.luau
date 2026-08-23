@@ -9,18 +9,32 @@ local Rolling = require(Shared.Utilities.Rolling)
 local RollingService = {}
 
 function RollingService:Init()
-	--> Count comes from the client so it can be anything, erroring out of the listener
-	--> rejects the caller's promise instead of handing back rolls they never unlocked.
-	NetworkingServer.Roll.On(function(Player, Count): { Player: any, Results: { [number]: Rolling.Desk } }
+	NetworkingServer.Roll.On(function(Player, Count): { Player: any, Results: { [number]: Rolling.Result } }
 		local Data = PlayerData[Player]
 		assert(Data, `No loaded data for {Player.Name}`)
 
 		local Unlocked = Data.RerollPads()
 		assert(Count <= Unlocked, `{Player.Name} asked for {Count} rolls with only {Unlocked} unlocked`)
 
+		local Results = Rolling.Roll(Count, Data.Luck())
+
+		local Stale = {}
+
+		for Slot in Data.Pads() do
+			table.insert(Stale, Slot)
+		end
+
+		for _, Slot in Stale do
+			Data.Pads[Slot](nil)
+		end
+
+		for Slot, Result in Results do
+			Data.Pads[Slot](Result)
+		end
+
 		return {
 			Player = Player,
-			Results = Rolling.Roll(Count, Data.Luck()),
+			Results = Results,
 		}
 	end)
 end
