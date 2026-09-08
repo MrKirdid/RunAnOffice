@@ -10,7 +10,9 @@ local DeskData = require(Shared.Utilities.DeskData)
 local Tiers = require(Shared.Utilities.Tiers)
 local PlayerData = require(Shared.PlayerData).server
 local Offsets = require(Shared.Configs.Offsets)
+local Revenue = require(Shared.Utilities.Revenue)
 local Rolling = require(Shared.Utilities.Rolling)
+local Store = require(Shared.Utilities.Store)
 local PlotService = require(script.Parent.PlotService)
 
 local NameRandom = Random.new()
@@ -44,11 +46,9 @@ type Tracked = {
 	Velocity: Vector3,
 }
 
-local MoveSpeed = 11.2
+local MoveSpeed = 8
 local TurnRate = 5
 local ArriveDistance = 0.5
-
-local CostPerValue = 100
 
 local TickRate = 1 / 10
 local BatchSize = 255
@@ -68,6 +68,14 @@ local NextUID = 0
 local SpawnLuck = 1
 
 local GroundParams: RaycastParams? = nil
+
+--> What the employee branch of the upgrade tree scales. Only a bought employee has an owner, so an
+--> unsold one always walks at the base speed no matter who is on the server.
+local function SpeedFor(Owner: Player?): number
+	local Data = if Owner then PlayerData[Owner] else nil
+
+	return if Data then Data.Multipliers.EmployeeSpeed() else 1
+end
 
 local EmployeeService = {
 	Employees = {} :: { [number]: Tracked },
@@ -274,9 +282,89 @@ function EmployeeService:SeatAt(Data: any, Floor: number, Slot: number, Name: st
 	end
 
 	local Seated = table.clone(Components)
-	Seated.Employee = { Name = Name, Type = Type }
+	Seated.Employee = { Name = Name, Type = Type, HiredAt = os.time() }
 
 	Desk(Seated)
+
+	return true
+end
+
+--> The reverse of SeatAt: the seat is emptied and half the hire price comes back. Floor and Slot
+--> are the client's word, so the desk is looked up in the caller's own data and nowhere else,
+--> which is what keeps this from selling anyone off somebody else's desk.
+function EmployeeService:Sell(Player: Player, Floor: number, Slot: number): boolean
+	local Data = PlayerData[Player]
+	local Desk = Data and DeskData.Get(Data, Floor, Slot)
+	local Components = Desk and Desk()
+
+	if not Desk or type(Components) ~= "table" then
+		return false
+	end
+
+	local Employee = Components.Employee
+
+	if type(Employee) ~= "table" or type(Employee.Type) ~= "string" then
+		return false
+	end
+
+	local Refund = Revenue.SellValue(Employee.Type)
+
+	local Emptied = table.clone(Components)
+	Emptied.Employee = nil
+
+	Desk(Emptied)
+
+	Data.Cash(function(Current: number)
+		return Current + Refund
+	end)
+
+	return true
+end
+
+--> Both seats are looked up in the caller's own data, so the four numbers can say anything and
+--> still only ever move the caller's own worker between the caller's own desks. A target with
+--> somebody already sat at it is a swap: the two change places. A seat promised to one still
+--> walking over counts as taken, or the walker would arrive to find it filled.
+function EmployeeService:Move(Player: Player, From: Seat, To: Seat): boolean
+	if From.Floor == To.Floor and From.Slot == To.Slot then
+		return false
+	end
+
+	local Data = PlayerData[Player]
+
+	if not Data then
+		return false
+	end
+
+	local Source = DeskData.Get(Data, From.Floor, From.Slot)
+	local Target = DeskData.Get(Data, To.Floor, To.Slot)
+	local SourceParts = Source and Source()
+	local TargetParts = Target and Target()
+
+	if not Source or not Target or type(SourceParts) ~= "table" or type(TargetParts) ~= "table" then
+		return false
+	end
+
+	local Employee = SourceParts.Employee
+
+	if type(Employee) ~= "table" then
+		return false
+	end
+
+	if GetClaimed(Player)[`{To.Floor}-{To.Slot}`] then
+		return false
+	end
+
+	local Other = TargetParts.Employee
+
+	local Filled = table.clone(TargetParts)
+	Filled.Employee = table.clone(Employee)
+
+	local Emptied = table.clone(SourceParts)
+	Emptied.Employee = if type(Other) == "table" then table.clone(Other) else nil
+
+	Target(Filled)
+	Source(Emptied)
 
 	return true
 end
@@ -343,9 +431,7 @@ function EmployeeService:Buy(Player: Player, UID: number): boolean
 end
 
 function EmployeeService:GetCost(Type: string): number
-	local Config = Employees[Type]
-
-	return math.round((if Config then Config.Value else 1) * CostPerValue)
+	return Revenue.HireCost(Type)
 end
 
 --> One line of console readout. Odds come off the plain table rather than whatever luck the roll
@@ -374,7 +460,8 @@ end
 
 --> Force names the type outright and skips the roll, which is how the console spawns a specific one.
 function EmployeeService:RollEmployee(Luck: number?, Force: string?): Employee
-	local Type = Force or Rolling.Pick(Employees, (Luck or 1) * SpawnLuck)
+	--> the console's spawn luck and the bought server luck both lift every spawn in the server
+	local Type = Force or Rolling.Pick(Employees, (Luck or 1) * SpawnLuck * Store.ServerLuck())
 
 	NextUID += 1
 
@@ -402,6 +489,20 @@ function EmployeeService:Start()
 	NetworkingServer.Employees.Buy.On(function(Player: Player, UID: number)
 		return self:Buy(Player, UID)
 	end)
+
+	NetworkingServer.Employees.Sell.On(function(Player: Player, Seat: { Floor: number, Slot: number })
+		return self:Sell(Player, Seat.Floor, Seat.Slot)
+	end)
+
+	NetworkingServer.Employees.Move.On(
+		function(Player: Player, Seats: { FromFloor: number, FromSlot: number, ToFloor: number, ToSlot: number })
+			return self:Move(
+				Player,
+				{ Floor = Seats.FromFloor, Slot = Seats.FromSlot },
+				{ Floor = Seats.ToFloor, Slot = Seats.ToSlot }
+			)
+		end
+	)
 
 	task.spawn(function()
 		while true do
@@ -445,7 +546,7 @@ function EmployeeService:Start()
 					continue
 				end
 
-				local Desired = ToTarget.Unit * MoveSpeed
+				local Desired = ToTarget.Unit * (MoveSpeed * SpeedFor(Employee.LastBoughtBy))
 
 				local Blend = 1 - math.exp(-TurnRate * DeltaTime)
 				Employee.Velocity = Employee.Velocity:Lerp(Desired, Blend)

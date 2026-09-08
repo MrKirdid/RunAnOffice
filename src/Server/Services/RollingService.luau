@@ -5,6 +5,7 @@ local Shared = ReplicatedStorage.Shared
 local NetworkingServer = require(Shared.Networking.networkingServer)
 local PlayerData = require(Shared.PlayerData).server
 local Rolling = require(Shared.Utilities.Rolling)
+local Store = require(Shared.Utilities.Store)
 
 local RollingService = {}
 
@@ -16,7 +17,8 @@ function RollingService:Init()
 		local Unlocked = Data.RerollPads()
 		assert(Count <= Unlocked, `{Player.Name} asked for {Count} rolls with only {Unlocked} unlocked`)
 
-		local Results = Rolling.Roll(Count, Data.Luck())
+		--> the tree's luck with everything bought on top: Lucky Roller, and the server's boost
+		local Results = Rolling.Roll(Count, Store.Luck(Data))
 
 		local Stale = {}
 

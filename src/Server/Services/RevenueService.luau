@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage.Shared
 
 local PlayerData = require(Shared.PlayerData).server
 local Revenue = require(Shared.Utilities.Revenue)
+local Store = require(Shared.Utilities.Store)
 
 local Interval = 1
 local DebugFolderName = "Cash"
@@ -68,7 +69,7 @@ end
 function RevenueService:GetRate(Player: Player): number
 	local Data = PlayerData[Player]
 
-	return if Data then Revenue.PlotRate(Data) else 0
+	return if Data then Revenue.PlotRate(Data) * Data.Multipliers.Cash() * Store.CashMultiplier(Data) else 0
 end
 
 function RevenueService:Pay()
@@ -82,7 +83,9 @@ function RevenueService:Pay()
 		--> Floored, never rounded up, and no fraction carried over to the next tick: whatever is
 		--> under a whole dollar is dropped. The cheapest desk pays 22 a second, so nothing that
 		--> earns at all ever floors to nothing.
-		local Amount = math.floor(Revenue.PlotRate(Data))
+		--> The tree's multiplier is what the cash branch raises, 1 until one is bought, and what
+		--> the shop sold -- the ladder's rung, VIP -- is multiplied on top of it.
+		local Amount = math.floor(Revenue.PlotRate(Data) * Data.Multipliers.Cash() * Store.CashMultiplier(Data))
 
 		Player:SetAttribute(RateAttribute, Amount)
 

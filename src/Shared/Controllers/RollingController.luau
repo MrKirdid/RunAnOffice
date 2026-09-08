@@ -7,6 +7,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Assets = ReplicatedStorage:WaitForChild("Assets")
 
 local ItemDisplayController = require(Shared.Controllers.ItemDisplayController)
+local SoundController = require(Shared.Controllers.SoundController)
 local CarryController = require(Shared.Controllers.CarryController)
 local NetworkingClient = require(Shared.Networking.networkingClient)
 local PlotController = require(Shared.Controllers.PlotController)
@@ -14,13 +15,19 @@ local Signal = require(Shared.Packages.Fastsignal)
 local Rolling = require(Shared.Utilities.Rolling)
 local PartConfigs = require(Shared.Configs.Parts)
 local Offsets = require(Shared.Configs.Offsets)
+local Tiers = require(Shared.Utilities.Tiers)
+local VfxController = require(Shared.Controllers.VfxController)
 local PlayerData = require(Shared.PlayerData).client
+local Store = require(Shared.Utilities.Store)
 local Parts = require(Assets.Parts)
 
 local SFX = Assets.SFX.Rolling
 local ConfettiVFX = Assets.VFX.ConfettiVFX
 
 local DeskDisplayTime = 4
+
+--> How often Auto Roll looks for a chance to press the button.
+local AutoRollInterval = 3
 local DeskDisplay = { Duration = DeskDisplayTime, OnTop = true }
 
 local PickupText = "Pick Up!"
@@ -167,8 +174,11 @@ function RollingService:_AddPickup(Model: Model, Card: BasePart, Final: Rolling.
 	Prompt.Triggered:Connect(function()
 		Prompt.Enabled = false
 
-		NetworkingClient.Items.PickUp.Invoke(Pad)
+		NetworkingClient.Items.PickUp
+			.Invoke(Pad)
 			:andThen(function()
+				SoundController:Play("Confirm")
+
 				Point:Destroy()
 
 				local Listed = table.find(self.LastDisplays or {}, Card)
@@ -203,10 +213,16 @@ function RollingService:_Spin(
 	HighlightEffect.OutlineTransparency = 0
 	HighlightEffect.DepthMode = Enum.HighlightDepthMode.Occluded
 
-	-- TODO: Amount should come off a speed upgrade
+	--> How much quicker the spin resolves, off the rolling branch of the upgrade tree. Both ends of
+	--> the curve are divided by it, so the whole spin shortens by the same factor rather than the
+	--> tail alone, and the number of ticks stays the same.
+	--> Fast Spin doubles whatever the tree got the spin to.
+	local Speed = math.max(PlayerData.Multipliers.RollSpeed(), 0.1)
+		* (if Store.Owns(PlayerData, "FastSpin") then 2 else 1)
+
 	local Amount = 20
-	local Opening = 0.245
-	local Fastest = 0.028
+	local Opening = 0.245 / Speed
+	local Fastest = 0.028 / Speed
 	local Fade = 0.25
 	local TickTopPitch = 3.5
 
@@ -308,8 +324,14 @@ function RollingService:_Spin(
 		end
 	end
 
+	--> Only what the spin landed on wears one. The models the reel is blurred with are thrown away
+	--> a frame later, and an aura flickering through them would give the result away before the
+	--> spin got to it.
 	for Index, Model in Finals do
 		local Entry = Info[Index]
+
+		VfxController:Aura(Model, (Tiers.FromVariant(Entry.Final.Variant)))
+
 		local Card = ItemDisplayController:Show(Model, Entry.Final.Component, Entry.Final.Variant, Entry.Display)
 
 		table.insert(Displays, Card)
@@ -390,6 +412,20 @@ function RollingService:RollDesk(DeskModel: Model, Desk: Rolling.Desk)
 	return self:_RollVizual(self:GetDeskVisualData(DeskModel:GetPivot(), Desk))
 end
 
+--> One part, in the one place on the desk it belongs: the spin behind a slot button. Fixed like
+--> the desk roll is, because which of the three this is was settled by the button that was pressed
+--> -- only the quality is still up in the air, so only the variant blurs.
+function RollingService:RollComponent(Anchor: CFrame, Component: string, Variant: string)
+	return self:_RollVizual({
+		{
+			CFrame = Anchor,
+			Display = DeskDisplay,
+			Fixed = true,
+			Final = { Component = Component, Variant = Variant },
+		},
+	})
+end
+
 function RollingService:RollSlots()
 	if self.Rolling then
 		return nil
@@ -458,10 +494,42 @@ function RollingService:Start()
 	Prompt.Triggered:Connect(function()
 		Prompt.Enabled = false
 
+		SoundController:Play("Press")
+
 		local Data = self:RollSlots()
 
 		Prompt.Enabled = true
 		print(Data)
+	end)
+
+	--> Auto Roll presses the button for the player while they stand on their own plot. Paced by
+	--> the spin rather than a timer, and never while a roll is already going or the button is
+	--> switched off for one.
+	task.spawn(function()
+		while true do
+			task.wait(AutoRollInterval)
+
+			if not Store.Owns(PlayerData, "AutoRoll") or self.Rolling or not Prompt.Enabled then
+				continue
+			end
+
+			local Character = Players.LocalPlayer.Character
+			local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+
+			if not Root or not Root:IsA("BasePart") then
+				continue
+			end
+
+			local Reach = Plot:GetExtentsSize().Magnitude / 2
+
+			if (Plot:GetPivot().Position - Root.Position).Magnitude > Reach then
+				continue
+			end
+
+			Prompt.Enabled = false
+			self:RollSlots()
+			Prompt.Enabled = true
+		end
 	end)
 end
 

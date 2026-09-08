@@ -8,6 +8,7 @@ local Assets = ReplicatedStorage:WaitForChild("Assets")
 local PartConfigs = require(Shared.Configs.Parts)
 local PlayerData = require(Shared.PlayerData).client
 local Rolling = require(Shared.Utilities.Rolling)
+local Store = require(Shared.Utilities.Store)
 local Parts = require(Assets:WaitForChild("Parts"))
 
 local GuiName = "ModelPreview"
@@ -44,7 +45,8 @@ local function OddsText(Variant: string): string
 		return if Chance > 0 then `1 in {math.floor(1 / Chance + 0.5)}` else "never"
 	end
 
-	local Luck = PlayerData.Luck()
+	--> the luck the server will actually roll at, passes and server boost included
+	local Luck = Store.Luck(PlayerData)
 	local Text = `{Odds(Rolling.Chances(PartConfigs.Variants, 1)[Variant])}  ·  value {Entry.Value}`
 
 	if Luck ~= 1 then
