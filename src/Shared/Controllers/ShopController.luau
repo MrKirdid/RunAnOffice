@@ -488,9 +488,10 @@ function ShopController:_Adopt(Panel: Frame, Scroll: ScrollingFrame): Folder
 		end
 	end
 
-	--> the scroller fits its rows and scrolls only down
-	Scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	Scroll.CanvasSize = UDim2.new()
+	--> The scroller fits its rows and scrolls only down. Sized by hand off what the list lays
+	--> out: automatic canvas sizing measures the rows before their aspect constraints have
+	--> settled and never looks again, so it stopped about halfway down the shop.
+	Scroll.AutomaticCanvasSize = Enum.AutomaticSize.None
 	Scroll.ScrollingDirection = Enum.ScrollingDirection.Y
 
 	local Layout = Scroll:FindFirstChildWhichIsA("UIListLayout")
@@ -498,11 +499,56 @@ function ShopController:_Adopt(Panel: Frame, Scroll: ScrollingFrame): Folder
 	if Layout then
 		Layout.SortOrder = Enum.SortOrder.LayoutOrder
 		Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+		Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+			self:_FitCanvas()
+		end)
 	end
 
 	Templates.Parent = Panel
 
 	return Templates
+end
+
+--> The canvas is exactly as tall as the rows laid out in it, plus the padding drawn under them.
+function ShopController:_FitCanvas()
+	local Scroll = self.Scroll
+
+	if not Scroll then
+		return
+	end
+
+	local Layout = Scroll:FindFirstChildWhichIsA("UIListLayout")
+	local Padding = Scroll:FindFirstChildWhichIsA("UIPadding")
+
+	if not Layout then
+		return
+	end
+
+	local Extra = if Padding then Padding.PaddingTop.Offset + Padding.PaddingBottom.Offset else 0
+	local Fraction = if Padding then Padding.PaddingTop.Scale + Padding.PaddingBottom.Scale else 0
+
+	--> The content height is measured on screen, after every UIScale above it -- the panel pops
+	--> open on one -- and an offset handed back gets scaled by them again. Divided out, so the
+	--> canvas is right at every point of the pop rather than only once it has settled.
+	local Scale = 1
+	local Ancestor: Instance? = Scroll
+
+	while Ancestor and not Ancestor:IsA("ScreenGui") do
+		local UIScale = Ancestor:FindFirstChildOfClass("UIScale")
+
+		if UIScale then
+			Scale *= math.max(UIScale.Scale, 0.01)
+		end
+
+		Ancestor = Ancestor.Parent
+	end
+
+	--> A padding drawn in scale is a fraction of the canvas itself, so the canvas has to be the
+	--> height that leaves the rows exactly their room once that fraction is taken off the top.
+	local Rows = Layout.AbsoluteContentSize.Y / Scale + Extra
+
+	Scroll.CanvasSize = UDim2.fromOffset(0, Rows / math.max(1 - Fraction, 0.5))
 end
 
 function ShopController:_Template(Name: string): GuiObject
@@ -999,6 +1045,7 @@ function ShopController:Build(Gui: ScreenGui)
 	self:_Flush(Place)
 	self:_RefreshSkips()
 	self:_BindRail()
+	self:_FitCanvas()
 end
 
 function ShopController:Start()

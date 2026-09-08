@@ -94,9 +94,9 @@ local Gradients: { [string]: { Color3 } } = {
 
 local Layout: { Entry } = {
 	--> Bundles. The starter sits on top for the day it is on offer, the rest stay.
+	{ Template = "Header", Anchor = "Packs", Title = "Packs" },
 	{
 		Template = "Bundle",
-		Anchor = "Packs",
 		Key = "Starter",
 		Kind = "Product",
 		Id = 0,
