@@ -1,13 +1,16 @@
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
+local Employees = require(Shared.Configs.Employees)
 local Format = require(Shared.Utilities.Format)
 local PlayerData = require(Shared.PlayerData).client
 local Products = require(Shared.Configs.Products)
 local Renders = require(Shared.Configs.Renders)
+local Revenue = require(Shared.Utilities.Revenue)
 local SoundController = require(Shared.Controllers.SoundController)
 local Store = require(Shared.Utilities.Store)
 
@@ -25,26 +28,29 @@ local TemplatesName = "Templates"
 --> many seconds of it, and the card says so in cash rather than in hours.
 local RateAttribute = "MoneyPerSecond"
 
---> Where the six rungs sit across the ladder row, as fractions of its width. The row was drawn
---> with five boxes; a sixth needs them a touch slimmer.
-local StepStart = 0.27
-local StepGap = 0.126
-local StepY = 0.475
-local StepSize = UDim2.fromScale(0.105, 0.27)
-
 --> The icons down the panel's left edge, top to bottom, and the row each one jumps to.
 local RailSections = { "Passes", "Luck", "Packs", "Cash" }
 local RailMinWidth = 0.1
 
+--> The bundle row was drawn with five item boxes; a pack's parts fill them in order.
+local BundleBoxes = 5
+local BoxIconSize = UDim2.fromScale(0.78, 0.78)
+
+--> The timer line on a bundle, coloured the way the row was drawn.
+local TimerColor = "rgb(255,23,0)"
+local TimerInterval = 1
+
+--> The luck row's subtitle, current tier to the next, coloured the way the row was drawn.
+local NextColor = "rgb(255,240,0)"
+
 local OwnedText = "OWNED"
 local MaxedText = "MAXED"
-local BoughtMark = "✓"
 
 local OwnedColor = Color3.fromRGB(190, 190, 190)
-local NextStrokeColor = Color3.fromRGB(255, 255, 255)
 
 type Entry = Products.Entry
 type Rung = Products.Rung
+type Tier = Products.Tier
 type Place = (GuiObject) -> GuiObject
 
 --> Everything a button needs to ask Roblox for a purchase.
@@ -68,8 +74,11 @@ local ShopController = {
 	--> what Roblox says each id costs, so a rebuild does not ask again
 	Prices = {} :: { [number]: number },
 
-	--> the skip cards' cash labels, refreshed whenever the rate moves
+	--> the skip cards' cash titles, refreshed whenever the rate moves
 	SkipLabels = {} :: { { Label: TextLabel, Hours: number } },
+
+	--> the bundle timers, ticked once a second
+	Timers = {} :: { { Label: TextLabel, ExpiresAt: number } },
 
 	--> cards waiting to be paired into a row, see Flush
 	PendingCards = {} :: { Entry },
@@ -101,7 +110,7 @@ local function Gradient(Stops: { Color3 }): ColorSequence
 	return ColorSequence.new(Keypoints)
 end
 
---> Recolours the gradient a row or card was drawn with, if it has one.
+--> Recolours the gradient a row or card was drawn with, only when the entry names one.
 local function Paint(Object: Instance, Name: string?)
 	local Stops = if Name then Products.Gradients[Name] else nil
 	local Existing = Object:FindFirstChildWhichIsA("UIGradient")
@@ -133,6 +142,28 @@ local function ProductOf(Entry: Entry): Product
 		Id = Entry.Id or 0,
 		Price = Entry.Price or 0,
 	}
+end
+
+--> "1d 10h 10m" the way the timer line was drawn, down to minutes, then seconds for the last one.
+local function Clock(Seconds: number): string
+	local Left = math.max(math.floor(Seconds), 0)
+	local Days = Left // 86400
+	local Hours = Left % 86400 // 3600
+	local Minutes = Left % 3600 // 60
+
+	if Days > 0 then
+		return `{Days}d {Hours}h {Minutes}m`
+	end
+
+	if Hours > 0 then
+		return `{Hours}h {Minutes}m`
+	end
+
+	if Minutes > 0 then
+		return `{Minutes}m`
+	end
+
+	return `{Left}s`
 end
 
 local function BindButton(Button: GuiButton, Press: () -> ())
@@ -198,6 +229,10 @@ local function ByY(A: GuiObject, B: GuiObject): boolean
 	return A.Position.Y.Scale < B.Position.Y.Scale
 end
 
+local function ByYDescending(A: GuiObject, B: GuiObject): boolean
+	return A.Position.Y.Scale > B.Position.Y.Scale
+end
+
 --> A row is sized by its width and nothing else, so an auto-sizing canvas can grow under it
 --> without the row shrinking to meet it. Drawn "fit within", which is fine against a fixed
 --> canvas and a feedback loop against a growing one.
@@ -212,11 +247,11 @@ end
 
 --> Which kind of example row this is, read off what was drawn in it.
 local function KindOf(Row: Instance): string?
-	local Steps, Slots, Buys, Close = 0, 0, 0, false
+	local Boxes, Slots, Buys, Close = 0, 0, 0, false
 
 	for _, Object in Row:GetChildren() do
 		if Object.Name == "Main" then
-			Steps += 1
+			Boxes += 1
 		elseif Object.Name == "Slot" and Object:IsA("ImageButton") then
 			Slots += 1
 		elseif Object.Name == "GreenButton" then
@@ -226,8 +261,8 @@ local function KindOf(Row: Instance): string?
 		end
 	end
 
-	if Steps >= 2 then
-		return "Ladder"
+	if Boxes >= 2 then
+		return "Bundle"
 	end
 
 	if Slots >= 1 then
@@ -245,14 +280,15 @@ local function KindOf(Row: Instance): string?
 	return nil
 end
 
---> The drawn ladder: five step boxes, three buttons, a title drawn twice for its shadow, a timer
---> on the right and a big icon. Kept: one step, one button, one title, the timer as a subtitle.
-local function ShapeLadder(Row: GuiObject)
-	local Steps, Buys, Titles = {}, {}, {}
+--> The drawn bundle: five item boxes, three buttons, a title drawn twice for its shadow, a timer
+--> on the right and a big icon. Kept as drawn, with the boxes named Box1 to Box5 left to right,
+--> each given an icon, and the rightmost button as the one that buys.
+local function ShapeBundle(Row: GuiObject)
+	local Boxes, Buys, Titles = {}, {}, {}
 
 	for _, Object in Row:GetChildren() do
 		if Object.Name == "Main" and Object:IsA("GuiObject") then
-			table.insert(Steps, Object)
+			table.insert(Boxes, Object)
 		elseif Object.Name == "GreenButton" and Object:IsA("ImageButton") then
 			table.insert(Buys, Object)
 		elseif Object:IsA("TextLabel") then
@@ -260,26 +296,32 @@ local function ShapeLadder(Row: GuiObject)
 		end
 	end
 
-	table.sort(Steps, ByX)
+	table.sort(Boxes, ByX)
 	table.sort(Buys, ByX)
 
-	for Index = 2, #Steps do
-		Steps[Index]:Destroy()
+	for Index, Box in Boxes do
+		local Labels = TextLabelsOf(Box)
+
+		table.sort(Labels, ByY)
+
+		Box.Name = "Box" .. Index
+		Labels[1].Name = "Top"
+		Labels[2].Name = "Bottom"
+
+		local Icon = Instance.new("ImageLabel")
+		Icon.Name = "Icon"
+		Icon.BackgroundTransparency = 1
+		Icon.BorderSizePixel = 0
+		Icon.AnchorPoint = Vector2.new(0.5, 0.5)
+		Icon.Position = UDim2.fromScale(0.5, 0.5)
+		Icon.Size = BoxIconSize
+		Icon.ScaleType = Enum.ScaleType.Fit
+		Icon.Parent = Box
 	end
 
 	for Index = 1, #Buys - 1 do
 		Buys[Index]:Destroy()
 	end
-
-	local Step = Steps[1]
-	local StepLabels = TextLabelsOf(Step)
-
-	table.sort(StepLabels, ByY)
-
-	Step.Name = "Step"
-	Step.Size = StepSize
-	StepLabels[1].Name = "Rung"
-	StepLabels[2].Name = "Price"
 
 	local Buy = Buys[#Buys]
 
@@ -296,9 +338,7 @@ local function ShapeLadder(Row: GuiObject)
 		end
 	end
 
-	table.sort(Big, function(A: TextLabel, B: TextLabel)
-		return A.Position.Y.Scale > B.Position.Y.Scale
-	end)
+	table.sort(Big, ByYDescending)
 
 	Big[1].Name = "Title"
 
@@ -327,9 +367,7 @@ local function ShapeFeature(Row: GuiObject)
 		end
 	end
 
-	table.sort(Big, function(A: TextLabel, B: TextLabel)
-		return A.Position.Y.Scale > B.Position.Y.Scale
-	end)
+	table.sort(Big, ByYDescending)
 
 	Big[1].Name = "Title"
 
@@ -395,12 +433,6 @@ local function ShapeCardRow(Row: GuiObject)
 		if Badge and Badge:IsA("GuiObject") then
 			Badge.Name = "Badge"
 			Badge.Visible = false
-
-			local Timer = Badge:FindFirstChild("UnlockTimerLabel")
-
-			if Timer then
-				Timer.Name = "Label"
-			end
 		end
 
 		Card.Name = if Index == 1 then "CardA" else "CardB"
@@ -409,7 +441,7 @@ local function ShapeCardRow(Row: GuiObject)
 end
 
 local Shapers: { [string]: (GuiObject) -> () } = {
-	Ladder = ShapeLadder,
+	Bundle = ShapeBundle,
 	Feature = ShapeFeature,
 	CardRow = ShapeCardRow,
 	Header = function() end,
@@ -450,7 +482,7 @@ function ShopController:_Adopt(Panel: Frame, Scroll: ScrollingFrame): Folder
 		Row:Destroy()
 	end
 
-	for _, Kind in { "Ladder", "Feature", "CardRow", "Header" } do
+	for Kind in Shapers do
 		if not Templates:FindFirstChild(Kind) then
 			warn(`[Shop] {GuiName} has no example row to use as a {Kind}`)
 		end
@@ -538,11 +570,11 @@ function ShopController:Prompt(Product: Product)
 	MarketplaceService:PromptProductPurchase(Players.LocalPlayer, Product.Id)
 end
 
-function ShopController:_MarkOwned(Buy: ImageButton)
+function ShopController:_MarkOwned(Buy: ImageButton, Text: string?)
 	Buy.ImageColor3 = OwnedColor
 	Buy.AutoButtonColor = false
 
-	Label(Buy, "Price").Text = OwnedText
+	Label(Buy, "Price").Text = Text or OwnedText
 end
 
 --> The save is the server's word on a pass and is here before any pass has an id; Roblox is
@@ -577,7 +609,7 @@ function ShopController:_CheckOwned(Product: Product, Buy: ImageButton)
 end
 
 --> The price button, and anything else on the row that should do what it does.
-function ShopController:_BindBuy(Product: Product, Buy: ImageButton, ...: GuiButton)
+function ShopController:_BindBuy(Product: Product, Buy: ImageButton, ...: GuiObject)
 	self:_ShowPrice(Product, Label(Buy, "Price"))
 	self:_CheckOwned(Product, Buy)
 
@@ -591,23 +623,67 @@ function ShopController:_BindBuy(Product: Product, Buy: ImageButton, ...: GuiBut
 
 	BindButton(Buy, Press)
 
-	for _, Button in { ... } do
-		BindButton(Button, Press)
+	for _, Object in { ... } do
+		if Object:IsA("GuiButton") then
+			BindButton(Object, Press)
+		else
+			BindPress(Object, Press)
+		end
 	end
 end
 
+--> The ladder as a card: the next rung is what is for sale, at its price, and the card says
+--> where the player is.
+function ShopController:_FillLadderCard(Card: ImageButton, Entry: Entry)
+	local Rungs = Entry.Rungs or {}
+	local Owned = PlayerData.Store.CashRung()
+	local Current = Rungs[Owned]
+	local Next = Rungs[Owned + 1]
+	local Buy = Child(Card, "Buy") :: ImageButton
+
+	if not Next then
+		Label(Card, "Title").Text = `Cash x{if Current then Current.Multiplier else 1}`
+		Label(Card, "Description").Text = "Every rung bought!"
+		self:_MarkOwned(Buy, MaxedText)
+
+		return
+	end
+
+	Label(Card, "Title").Text = `Cash x{Next.Multiplier}`
+	Label(Card, "Description").Text = if Current then `You have x{Current.Multiplier}!` else "Every desk pays more!"
+
+	local Product: Product = { Key = Next.Key, Kind = "Product", Id = Next.Id, Price = Next.Price }
+
+	self:_ShowPrice(Product, Label(Buy, "Price"))
+
+	local function Press()
+		self:Prompt(Product)
+	end
+
+	BindButton(Buy, Press)
+	BindButton(Card, Press)
+end
+
 function ShopController:_FillCard(Card: ImageButton, Entry: Entry)
+	local Title = Label(Card, "Title")
 	local Description = Label(Card, "Description")
 
-	Card.Name = Entry.Key or Card.Name
-	Label(Card, "Title").Text = Entry.Title or ""
-	Description.Text = Entry.Description or ""
+	Card.Name = Entry.Key or Card.Name;
 	(Child(Card, "Icon") :: ImageLabel).Image = IconOf(Entry)
 
 	Paint(Card, Entry.Gradient)
 
+	if Entry.Rungs then
+		self:_FillLadderCard(Card, Entry)
+		return
+	end
+
+	Title.Text = Entry.Title or ""
+	Description.Text = Entry.Description or ""
+
+	--> a skip's title is the cash it is worth right now
 	if Entry.Hours then
-		table.insert(self.SkipLabels, { Label = Description, Hours = Entry.Hours })
+		table.insert(self.SkipLabels, { Label = Title, Hours = Entry.Hours })
 	end
 
 	self:_BindBuy(ProductOf(Entry), Child(Card, "Buy") :: ImageButton, Card)
@@ -659,75 +735,113 @@ function Fillers.Header(self, Entry: Entry, Place: Place)
 	return Place(Row)
 end
 
+--> Server luck: the row always offers the tier above what the server is running, and reads
+--> current to next the way it was drawn.
 function Fillers.Feature(self, Entry: Entry, Place: Place)
 	local Row = self:_Template("Feature")
 	local Icon = Child(Row, "Icon") :: ImageButton
+	local Buy = Child(Row, "Buy") :: ImageButton
 
 	Row.Name = Entry.Key or Row.Name
 	Label(Row, "Title").Text = Entry.Title or ""
-	Label(Row, "Subtitle").Text = Entry.Subtitle or ""
 	Label(Row, "Description").Text = Entry.Description or ""
 	Icon.Image = IconOf(Entry)
 
 	Paint(Row, Entry.Gradient)
 
-	self:_BindBuy(ProductOf(Entry), Child(Row, "Buy") :: ImageButton, Icon)
-
-	return Place(Row)
-end
-
---> The rungs drawn as steps, the ones already bought ticked, the next one lit and priced on the
---> button. Only that one is ever for sale.
-function Fillers.Ladder(self, Entry: Entry, Place: Place)
-	local Row = self:_Template("Ladder")
-	local Subtitle = Label(Row, "Subtitle")
-	local Buy = Child(Row, "Buy") :: ImageButton
-	local Step = Child(Row, "Step") :: Frame
-	local Rungs = Entry.Rungs or {}
-
-	local Owned = PlayerData.Store.CashRung()
-	local Next = Rungs[Owned + 1]
-
-	Row.Name = Entry.Key or Row.Name
-	Label(Row, "Title").Text = Entry.Title or ""
-	(Child(Row, "Icon") :: ImageButton).Image = IconOf(Entry)
-
-	Paint(Row, Entry.Gradient)
-
-	for Index, Rung in Rungs do
-		local Box = if Index == 1 then Step else Step:Clone()
-		local Stroke = Box:FindFirstChildWhichIsA("UIStroke")
-
-		Box.Name = Rung.Key
-		Box.Position = UDim2.fromScale(StepStart + (Index - 1) * StepGap, StepY)
-		Label(Box, "Rung").Text = "x" .. Rung.Multiplier
-		Label(Box, "Price").Text = if Index <= Owned then BoughtMark else tostring(Rung.Price)
-
-		if Stroke and Index == Owned + 1 then
-			Stroke.Color = NextStrokeColor
-		end
-
-		Box.Parent = Row
-	end
+	local Next = if Entry.Tiers then Store.NextTier() else nil
 
 	if not Next then
-		Subtitle.Text = "Every rung bought!"
-		Label(Buy, "Price").Text = MaxedText
-		Buy.ImageColor3 = OwnedColor
-		Buy.AutoButtonColor = false
+		Label(Row, "Subtitle").Text = Entry.Subtitle or ""
+		self:_BindBuy(ProductOf(Entry), Buy, Icon)
 
 		return Place(Row)
 	end
 
-	Subtitle.Text = `Next: x{Next.Multiplier} cash`
+	local Current = Store.ServerLuck()
+
+	Label(Row, "Subtitle").Text = `{Current}x → <font color="{NextColor}">{Next.Multiplier}x</font>`
 
 	local Product: Product = { Key = Next.Key, Kind = "Product", Id = Next.Id, Price = Next.Price }
 
 	self:_ShowPrice(Product, Label(Buy, "Price"))
 
-	BindButton(Buy, function()
+	local function Press()
 		self:Prompt(Product)
-	end)
+	end
+
+	BindButton(Buy, Press)
+	BindButton(Icon, Press)
+
+	return Place(Row)
+end
+
+--> A pack: the parts of each set in the boxes, then the employee, each with what it earns on
+--> top and how many underneath; the timer line for the starter, the contents for the rest.
+function Fillers.Bundle(self, Entry: Entry, Place: Place)
+	local Row = self:_Template("Bundle")
+	local Icon = Child(Row, "Icon") :: ImageButton
+	local Subtitle = Label(Row, "Subtitle")
+
+	Row.Name = Entry.Key or Row.Name
+	Label(Row, "Title").Text = Entry.Title or ""
+	Icon.Image = IconOf(Entry)
+
+	Paint(Row, Entry.Gradient)
+
+	local Items: { { Icon: string, Top: string, Bottom: string } } = {}
+	local Contents: { Products.DeskSet } = Entry.Contents or {}
+
+	for _, Set in Contents do
+		local Render = Renders.Components[Set.Variant]
+
+		for _, Component in { "Computer", "Keyboard", "Monitor" } do
+			table.insert(Items, {
+				Icon = if Render then Render[Component] else "",
+				Top = Format.Rate(Revenue.ComponentValue(Component, Set.Variant)),
+				Bottom = "x" .. Set.Sets,
+			})
+		end
+	end
+
+	if Entry.Employee and Entry.Employees then
+		local Config = Employees[Entry.Employee]
+
+		table.insert(Items, {
+			Icon = Products.Icons.Trophy,
+			Top = `x{if Config then Config.Value else 1}`,
+			Bottom = "x" .. Entry.Employees,
+		})
+	end
+
+	for Index = 1, BundleBoxes do
+		local Box = Child(Row, "Box" .. Index)
+		local Item = Items[Index]
+
+		if not Item or not Box:IsA("GuiObject") then
+			if Box:IsA("GuiObject") then
+				Box.Visible = false
+			end
+
+			continue
+		end
+
+		Label(Box, "Top").Text = Item.Top
+		Label(Box, "Bottom").Text = Item.Bottom;
+		(Child(Box, "Icon") :: ImageLabel).Image = Item.Icon
+	end
+
+	if Entry.Timed then
+		local ExpiresAt = PlayerData.Store.StarterExpiresAt()
+
+		Subtitle.RichText = true
+		table.insert(self.Timers, { Label = Subtitle, ExpiresAt = ExpiresAt })
+		self:_TickTimers()
+	else
+		Subtitle.Text = Entry.Subtitle or ""
+	end
+
+	self:_BindBuy(ProductOf(Entry), Child(Row, "Buy") :: ImageButton, Icon)
 
 	return Place(Row)
 end
@@ -738,8 +852,29 @@ function ShopController:_RefreshSkips()
 
 	for _, Entry in self.SkipLabels do
 		if Entry.Label.Parent then
-			Entry.Label.Text = "+" .. Format.Cash(Current * Entry.Hours * 3600)
+			Entry.Label.Text = Format.Cash(Current * Entry.Hours * 3600)
 		end
+	end
+end
+
+--> The starter's timer line, and the row taken down the second it runs out.
+function ShopController:_TickTimers()
+	local Now = os.time()
+
+	for _, Timer in self.Timers do
+		if not Timer.Label.Parent then
+			continue
+		end
+
+		--> the server stamps the day on the first join; until the stamp lands the offer is up
+		local Left = if Timer.ExpiresAt == 0 then Store.StarterWindow else Timer.ExpiresAt - Now
+
+		if Left <= 0 then
+			Timer.Label.Text = "Gone!"
+			continue
+		end
+
+		Timer.Label.Text = `Only for <font color="{TimerColor}">{Clock(Left)}</font>`
 	end
 end
 
@@ -781,6 +916,19 @@ function ShopController:_BindRail()
 	end
 end
 
+--> Whether an entry is on the shelf at all right now.
+local function Offered(Entry: Entry): boolean
+	if not Entry.Key or not Entry.Once then
+		return true
+	end
+
+	if Entry.Timed then
+		return Store.StarterOnOffer(PlayerData)
+	end
+
+	return not PlayerData.Store.OwnedProducts()[Entry.Key]
+end
+
 function ShopController:Build(Gui: ScreenGui)
 	local Panel = Resolve(Gui, PanelPath)
 
@@ -800,6 +948,7 @@ function ShopController:Build(Gui: ScreenGui)
 	self.Scroll = Scroll
 	table.clear(self.Anchors)
 	table.clear(self.SkipLabels)
+	table.clear(self.Timers)
 	table.clear(self.PendingCards)
 
 	--> the first build of a copy reads the drawn rows as templates and takes them down; every
@@ -824,8 +973,9 @@ function ShopController:Build(Gui: ScreenGui)
 
 	for _, Entry in Products.Layout do
 		local Fill = Fillers[Entry.Template]
+		local Needed = if Entry.Template == "Card" then "CardRow" else Entry.Template
 
-		if not Fill or not Adopted:FindFirstChild(if Entry.Template == "Card" then "CardRow" else Entry.Template) then
+		if not Fill or not Adopted:FindFirstChild(Needed) then
 			warn(`[Shop] no template for "{Entry.Template}" ({Entry.Key or Entry.Title or "?"})`)
 			continue
 		end
@@ -835,8 +985,7 @@ function ShopController:Build(Gui: ScreenGui)
 			self:_Flush(Place)
 		end
 
-		--> sold once and already bought: the row is simply not there any more
-		if Entry.Once and Entry.Key and PlayerData.Store.OwnedProducts()[Entry.Key] then
+		if not Offered(Entry) then
 			continue
 		end
 
@@ -898,6 +1047,17 @@ function ShopController:Start()
 	--> rung, a pass reading OWNED, a one-time pack going away
 	PlayerData.Store.Changed(function()
 		Rebuild()
+	end)
+
+	--> the luck row offers the tier above whatever is running, so it follows the server's boost
+	Workspace:GetAttributeChangedSignal(Store.LuckAttribute):Connect(Rebuild)
+
+	task.spawn(function()
+		while true do
+			task.wait(TimerInterval)
+
+			self:_TickTimers()
+		end
 	end)
 end
 

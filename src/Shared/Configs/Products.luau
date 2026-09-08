@@ -1,14 +1,14 @@
---> The shop, top to bottom. Every entry names the template in ShopUI's Templates folder it is
---> drawn with, and the fields that template reads. ShopController walks this list in order and
---> nothing about a product is drawn into the place, so adding a gamepass, a pack or a luck tier
---> is adding an entry here. MonetizationService grants off the same entries, by Key.
+--> The shop, top to bottom, in the order and shape it was drawn: bundle rows, the server luck
+--> row, a Passes header with cards under it, a Cash header with cards under it. Every entry
+--> names the template in ShopUI it is drawn with and the fields that template reads.
+--> ShopController walks this list in order; MonetizationService grants off the same entries.
 
 --> Templates:
---> Header   a section title. Title, and an Anchor if a rail button jumps here.
---> Card     half a row: Icon, Title, Description, one price button. Cards are paired two to a
--->          row automatically; an odd one leaves the other half empty.
---> Feature  a full row with a big icon, Title, Subtitle, Description and one price button.
---> Ladder   the cash multiplier: six Rungs drawn as steps, only the next one for sale.
+--> Bundle   the wide yellow row: five item boxes, a title, a timer line, a big icon, one button.
+-->          A pack. Contents fills the boxes (each part of the set, then the employee).
+--> Feature  the big-icon row with one button. Server luck: current tier → next tier.
+--> Header   a section title.
+--> Card     half a row: icon, title, description, one price button. Paired two to a row.
 
 --> Ids are the Creator Hub ids. A 0 is a product not made there yet; the shop shows Price as a
 --> stand-in until it is, and once the id is real the number on the button comes from Roblox
@@ -21,11 +21,25 @@ export type DeskSet = {
 	Sets: number,
 }
 
+export type Rung = {
+	Key: string,
+	Id: number,
+	Price: number,
+	Multiplier: number,
+}
+
+export type Tier = {
+	Key: string,
+	Id: number,
+	Price: number,
+	Multiplier: number,
+	Minutes: number,
+}
+
 export type Entry = {
 	Template: string,
-	--> the gradient every card in this stretch is painted with, by name in Gradients below
 	Gradient: string?,
-	--> a rail button of this name scrolls to this row
+	--> a rail icon of this name scrolls to this row
 	Anchor: string?,
 
 	Key: string?,
@@ -37,31 +51,25 @@ export type Entry = {
 	Description: string?,
 	Icon: string?,
 
-	--> sold once per account; the row goes away once OwnedProducts has it
+	--> sold once per account, and only inside the first day: the row goes away after either
 	Once: boolean?,
+	Timed: boolean?,
 
-	--> Card only. Hours turns the description into the cash that many hours of income is worth
-	--> right now, and Variant draws the computer of that part set as the icon.
+	--> Card: Hours makes the title the cash that many hours of income is worth right now.
+	--> Bundle and Card: Variant draws that part set's computer as the icon.
 	Hours: number?,
 	Variant: string?,
 
-	--> What the server hands out. Server luck: Multiplier for Minutes. A pack: desk sets, and
-	--> Employees of one Employee type sat at the seats they make.
-	Multiplier: number?,
-	Minutes: number?,
+	--> Bundle: the desk sets and the employees the server hands out
 	Contents: { DeskSet }?,
 	Employee: string?,
 	Employees: number?,
 
-	--> Ladder only
-	Rungs: { Rung }?,
-}
+	--> Feature: the server luck tiers, bought lowest to highest as the server's luck rises
+	Tiers: { Tier }?,
 
-export type Rung = {
-	Key: string,
-	Id: number,
-	Price: number,
-	Multiplier: number,
+	--> Card: the cash ladder, one rung for sale at a time
+	Rungs: { Rung }?,
 }
 
 --> Placeholder art already in the place, until every product has its own icon.
@@ -72,12 +80,8 @@ local Icons = {
 	Cash = "rbxassetid://139241177703025",
 }
 
+--> The colours the rows were drawn in stay as drawn; a name here only recolours when given.
 local Gradients: { [string]: { Color3 } } = {
-	Passes = { Color3.fromRGB(141, 229, 249), Color3.fromRGB(63, 192, 246) },
-	Gears = { Color3.fromRGB(236, 121, 234), Color3.fromRGB(178, 73, 236) },
-	Cash = { Color3.fromRGB(165, 255, 163), Color3.fromRGB(73, 255, 103) },
-	Luck = { Color3.fromRGB(211, 247, 13), Color3.fromRGB(7, 253, 0) },
-	Packs = { Color3.fromRGB(245, 207, 81), Color3.fromRGB(242, 167, 67) },
 	Founder = {
 		Color3.fromRGB(255, 0, 0),
 		Color3.fromRGB(255, 191, 0),
@@ -89,29 +93,82 @@ local Gradients: { [string]: { Color3 } } = {
 }
 
 local Layout: { Entry } = {
-	--> Packs: desk sets and nothing else. The starter sits at the top for the day it is on offer.
+	--> Bundles. The starter sits on top for the day it is on offer, the rest stay.
 	{
-		Template = "Feature",
-		Gradient = "Packs",
+		Template = "Bundle",
 		Anchor = "Packs",
 		Key = "Starter",
 		Kind = "Product",
 		Id = 0,
 		Price = 49,
 		Once = true,
+		Timed = true,
 		Title = "Starter Pack!",
-		Subtitle = "First 24 hours only!",
-		Description = "2 Steampunk desks + 2 Hamsters!",
 		Variant = "Steampunk",
 		Contents = { { Variant = "Steampunk", Sets = 2 } },
 		Employee = "Hamster",
 		Employees = 2,
 	},
+	{
+		Template = "Bundle",
+		Key = "Pro",
+		Kind = "Product",
+		Id = 0,
+		Price = 399,
+		Title = "Pro Pack!",
+		Subtitle = "4 desks + 4 workers",
+		Variant = "Space",
+		Contents = { { Variant = "Space", Sets = 4 } },
+		Employee = "Shark Boss",
+		Employees = 4,
+	},
+	{
+		Template = "Bundle",
+		Key = "Executive",
+		Kind = "Product",
+		Id = 0,
+		Price = 999,
+		Title = "Executive Pack!",
+		Subtitle = "8 desks + 8 workers",
+		Variant = "Galaxy",
+		Contents = { { Variant = "Galaxy", Sets = 8 } },
+		Employee = "MrBossy",
+		Employees = 8,
+	},
+	{
+		Template = "Bundle",
+		Key = "CEO",
+		Kind = "Product",
+		Id = 0,
+		Price = 2999,
+		Title = "CEO Pack!",
+		Subtitle = "24 desks + 16 workers",
+		Variant = "Galaxy",
+		Contents = { { Variant = "Galaxy", Sets = 16 }, { Variant = "Space", Sets = 8 } },
+		Employee = "Mr Money",
+		Employees = 16,
+	},
+
+	--> Everyone in the server gets it and the buyer's name goes on the banner. One row: it
+	--> always offers the tier above whatever the server is running.
+	{
+		Template = "Feature",
+		Anchor = "Luck",
+		Key = "ServerLuck",
+		Title = "Server Luck!",
+		Description = "Boosts server luck & employee rolling!",
+		Icon = Icons.Clover,
+		Tiers = {
+			{ Key = "Luck2", Id = 0, Price = 49, Multiplier = 2, Minutes = 10 },
+			{ Key = "Luck3", Id = 0, Price = 99, Multiplier = 3, Minutes = 15 },
+			{ Key = "Luck5", Id = 0, Price = 249, Multiplier = 5, Minutes = 20 },
+			{ Key = "Luck8", Id = 0, Price = 599, Multiplier = 8, Minutes = 30 },
+		},
+	},
 
 	{ Template = "Header", Anchor = "Passes", Title = "Passes" },
 	{
 		Template = "Card",
-		Gradient = "Passes",
 		Key = "Sprint",
 		Kind = "Pass",
 		Id = 0,
@@ -122,7 +179,6 @@ local Layout: { Entry } = {
 	},
 	{
 		Template = "Card",
-		Gradient = "Passes",
 		Key = "FastSpin",
 		Kind = "Pass",
 		Id = 0,
@@ -133,7 +189,6 @@ local Layout: { Entry } = {
 	},
 	{
 		Template = "Card",
-		Gradient = "Passes",
 		Key = "AutoRoll",
 		Kind = "Pass",
 		Id = 0,
@@ -144,7 +199,6 @@ local Layout: { Entry } = {
 	},
 	{
 		Template = "Card",
-		Gradient = "Passes",
 		Key = "LuckyRoller",
 		Kind = "Pass",
 		Id = 0,
@@ -155,32 +209,16 @@ local Layout: { Entry } = {
 	},
 	{
 		Template = "Card",
-		Gradient = "Passes",
 		Key = "VIP",
 		Kind = "Pass",
 		Id = 0,
 		Price = 399,
 		Title = "VIP",
-		Description = "+25% cash, a day of income, +1 pad, VIP tag & Golden Coil!",
+		Description = "+25% cash, a day of income, +1 pad & the VIP tag!",
 		Icon = Icons.Trophy,
 	},
-	{
-		Template = "Feature",
-		Gradient = "Packs",
-		Key = "Everything",
-		Kind = "Pass",
-		Id = 0,
-		Price = 999,
-		Title = "Everything!",
-		Subtitle = "23% off, one tap",
-		Description = "Every pass and every gear. 1,298 apart!",
-		Icon = Icons.Trophy,
-	},
-
-	{ Template = "Header", Title = "Gears" },
 	{
 		Template = "Card",
-		Gradient = "Gears",
 		Key = "GravCoil",
 		Kind = "Pass",
 		Id = 0,
@@ -191,7 +229,6 @@ local Layout: { Entry } = {
 	},
 	{
 		Template = "Card",
-		Gradient = "Gears",
 		Key = "Trolley",
 		Kind = "Pass",
 		Id = 0,
@@ -202,7 +239,6 @@ local Layout: { Entry } = {
 	},
 	{
 		Template = "Card",
-		Gradient = "Gears",
 		Key = "Jetpack",
 		Kind = "Pass",
 		Id = 0,
@@ -211,11 +247,32 @@ local Layout: { Entry } = {
 		Description = "Fly around the map!",
 		Icon = Icons.Trophy,
 	},
+	{
+		Template = "Card",
+		Key = "Everything",
+		Kind = "Pass",
+		Id = 0,
+		Price = 999,
+		Title = "Everything!",
+		Description = "Every pass above, 23% off!",
+		Icon = Icons.Trophy,
+	},
+	{
+		Template = "Card",
+		Gradient = "Founder",
+		Key = "Founder",
+		Kind = "Pass",
+		Id = 0,
+		Price = 9999,
+		Title = "Founder",
+		Description = "Your name on the Founders wall & the Founder tag!",
+		Icon = Icons.Trophy,
+	},
 
 	{ Template = "Header", Anchor = "Cash", Title = "Cash" },
+	--> The ladder as one card: whichever rung is next, at its price.
 	{
-		Template = "Ladder",
-		Gradient = "Cash",
+		Template = "Card",
 		Key = "Ladder",
 		Title = "Cash Multiplier",
 		Icon = Icons.Cash,
@@ -228,54 +285,49 @@ local Layout: { Entry } = {
 			{ Key = "Cash6", Id = 0, Price = 249, Multiplier = 8 },
 		},
 	},
-	--> Time skips: the player's own income for N hours, banked now. The card says it in cash.
+	--> Time skips: the player's own income for N hours, banked now. The card's title is the cash.
 	{
 		Template = "Card",
-		Gradient = "Cash",
 		Key = "Skip1h",
 		Kind = "Product",
 		Id = 0,
 		Price = 19,
-		Title = "1 Hour",
+		Description = "1 hour of income!",
 		Icon = Icons.Cash,
 		Hours = 1,
 	},
 	{
 		Template = "Card",
-		Gradient = "Cash",
 		Key = "Skip8h",
 		Kind = "Product",
 		Id = 0,
 		Price = 49,
-		Title = "8 Hours",
+		Description = "8 hours of income!",
 		Icon = Icons.Cash,
 		Hours = 8,
 	},
 	{
 		Template = "Card",
-		Gradient = "Cash",
 		Key = "Skip1d",
 		Kind = "Product",
 		Id = 0,
 		Price = 99,
-		Title = "1 Day",
+		Description = "A day of income!",
 		Icon = Icons.Cash,
 		Hours = 24,
 	},
 	{
 		Template = "Card",
-		Gradient = "Cash",
 		Key = "Skip3d",
 		Kind = "Product",
 		Id = 0,
 		Price = 249,
-		Title = "3 Days",
+		Description = "3 days of income!",
 		Icon = Icons.Cash,
 		Hours = 72,
 	},
 	{
 		Template = "Card",
-		Gradient = "Cash",
 		Key = "Pad",
 		Kind = "Product",
 		Id = 0,
@@ -283,119 +335,6 @@ local Layout: { Entry } = {
 		Title = "+1 Roll Pad",
 		Description = "One more pad, up to 9!",
 		Icon = Icons.Ticket,
-	},
-
-	--> Everyone in the server gets it and the buyer's name goes on the banner.
-	{ Template = "Header", Anchor = "Luck", Title = "Server Luck" },
-	{
-		Template = "Card",
-		Gradient = "Luck",
-		Key = "Luck2",
-		Kind = "Product",
-		Id = 0,
-		Price = 49,
-		Title = "2x Luck",
-		Description = "10 minutes, whole server!",
-		Icon = Icons.Clover,
-		Multiplier = 2,
-		Minutes = 10,
-	},
-	{
-		Template = "Card",
-		Gradient = "Luck",
-		Key = "Luck3",
-		Kind = "Product",
-		Id = 0,
-		Price = 99,
-		Title = "3x Luck",
-		Description = "15 minutes, whole server!",
-		Icon = Icons.Clover,
-		Multiplier = 3,
-		Minutes = 15,
-	},
-	{
-		Template = "Card",
-		Gradient = "Luck",
-		Key = "Luck5",
-		Kind = "Product",
-		Id = 0,
-		Price = 249,
-		Title = "5x Luck",
-		Description = "20 minutes, whole server!",
-		Icon = Icons.Clover,
-		Multiplier = 5,
-		Minutes = 20,
-	},
-	{
-		Template = "Card",
-		Gradient = "Luck",
-		Key = "Luck8",
-		Kind = "Product",
-		Id = 0,
-		Price = 599,
-		Title = "8x Luck",
-		Description = "30 minutes, whole server!",
-		Icon = Icons.Clover,
-		Multiplier = 8,
-		Minutes = 30,
-	},
-
-	{ Template = "Header", Title = "Packs" },
-	{
-		Template = "Card",
-		Gradient = "Packs",
-		Key = "Pro",
-		Kind = "Product",
-		Id = 0,
-		Price = 399,
-		Title = "Pro Pack",
-		Description = "4 Space desks + 4 Shark Boss!",
-		Variant = "Space",
-		Contents = { { Variant = "Space", Sets = 4 } },
-		Employee = "Shark Boss",
-		Employees = 4,
-	},
-	{
-		Template = "Card",
-		Gradient = "Packs",
-		Key = "Executive",
-		Kind = "Product",
-		Id = 0,
-		Price = 999,
-		Title = "Executive Pack",
-		Description = "8 Galaxy desks + 8 MrBossy!",
-		Variant = "Galaxy",
-		Contents = { { Variant = "Galaxy", Sets = 8 } },
-		Employee = "MrBossy",
-		Employees = 8,
-	},
-	{
-		Template = "Card",
-		Gradient = "Packs",
-		Key = "CEO",
-		Kind = "Product",
-		Id = 0,
-		Price = 2999,
-		Title = "CEO Pack",
-		Description = "16 Galaxy + 8 Space desks + 16 Mr Money!",
-		Variant = "Galaxy",
-		Contents = { { Variant = "Galaxy", Sets = 16 }, { Variant = "Space", Sets = 8 } },
-		Employee = "Mr Money",
-		Employees = 16,
-	},
-
-	--> A name on the wall and a tag nobody else gets. Nothing else, on purpose.
-	{
-		Template = "Feature",
-		Gradient = "Founder",
-		Key = "Founder",
-		Kind = "Pass",
-		Id = 0,
-		Price = 9999,
-		Title = "Founder",
-		Subtitle = "Be seen",
-		Description = "Your name on the Founders wall, and the Founder tag!",
-		Icon = Icons.Trophy,
 	},
 }
 

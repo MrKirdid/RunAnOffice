@@ -79,6 +79,8 @@ local Config = {
 		--> PurchaseIds the last receipts, so a receipt Roblox sends twice is granted once.
 		Store = {
 			CashRung = 0,
+			--> os.time() the starter pack stops being offered, set on the first join
+			StarterExpiresAt = 0,
 			Passes = {} :: { [string]: boolean },
 			OwnedProducts = {} :: { [string]: boolean },
 			PurchaseIds = {} :: { string },

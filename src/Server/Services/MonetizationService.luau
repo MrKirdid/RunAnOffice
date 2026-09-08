@@ -240,6 +240,12 @@ function MonetizationService:Grant(Player: Player, Data: any, Key: string): bool
 		return self:GrantRung(Data)
 	end
 
+	local Tier = Store.Tier(Key)
+
+	if Tier then
+		return ServerLuckService:Apply(Player, Tier.Multiplier, Tier.Minutes)
+	end
+
 	local Entry = Store.Entry(Key)
 
 	if not Entry then
@@ -256,8 +262,6 @@ function MonetizationService:Grant(Player: Player, Data: any, Key: string): bool
 		Granted = self:GrantPack(Player, Data, Entry)
 	elseif Entry.Hours then
 		Granted = self:GrantSkip(Player, Data, Entry.Hours)
-	elseif Entry.Multiplier and Entry.Minutes then
-		Granted = ServerLuckService:Apply(Player, Entry.Multiplier, Entry.Minutes)
 	elseif Key == "Pad" then
 		Granted = self:GrantPad(Data)
 	end
@@ -364,6 +368,12 @@ function MonetizationService:_HandlePlayer(Player: Player)
 		end
 
 		ApplyWalkSpeed(Player, Data)
+
+		--> the starter's day starts on the first join and is stamped once, so a rejoin reads the
+		--> same deadline rather than a fresh one
+		if Data.Store.StarterExpiresAt() == 0 then
+			Data.Store.StarterExpiresAt(os.time() + Store.StarterWindow)
+		end
 
 		if Store.Owns(Data, "Founder") then
 			Tag(Player, "FOUNDER")
