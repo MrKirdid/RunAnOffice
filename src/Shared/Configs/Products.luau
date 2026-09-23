@@ -1,14 +1,16 @@
---> The shop, top to bottom, in the order and shape it was drawn: bundle rows, the server luck
---> row, a Passes header with cards under it, a Cash header with cards under it. Every entry
---> names the template in ShopUI it is drawn with and the fields that template reads.
---> ShopController walks this list in order; MonetizationService grants off the same entries.
+--> The shop, top to bottom, in the order it is drawn: the packs, the server luck row, a Passes
+--> header with cards under it, a Cash header with cards under it. Every entry names the row in
+--> the place it is drawn with; ShopController clones that row and only ever changes its text and
+--> images. MonetizationService grants off the same entries.
 
---> Templates:
---> Bundle   the wide yellow row: five item boxes, a title, a timer line, a big icon, one button.
--->          A pack. Contents fills the boxes (each part of the set, then the employee).
---> Feature  the big-icon row with one button. Server luck: current tier → next tier.
---> Header   a section title.
---> Card     half a row: icon, title, description, one price button. Paired two to a row.
+--> Templates, by the name of the row in the place:
+--> Pack      StarterGui.ShopPackSetup.Pack: a title, a timer line, three icons with a caption under
+-->           the first two and a label pair beside the third, one button. What a pack hands out
+-->           goes in the boxes: the desks, the workers, then the cash bonus.
+--> Feature   ShopUI's luck row: a title, a subtitle, a description, a big icon, one button.
+--> Header    ShopUI's section title.
+--> Card      ShopUI's pass card: icon, title, description, price. Paired two to a row.
+--> CashCard  ShopUI's cash card: one big number and a price. Paired two to a row.
 
 --> Ids are the Creator Hub ids. A 0 is a product not made there yet; the shop shows Price as a
 --> stand-in until it is, and once the id is real the number on the button comes from Roblox
@@ -55,15 +57,16 @@ export type Entry = {
 	Once: boolean?,
 	Timed: boolean?,
 
-	--> Card: Hours makes the title the cash that many hours of income is worth right now.
-	--> Bundle and Card: Variant draws that part set's computer as the icon.
+	--> CashCard: Hours makes the number the cash that many hours of income is worth right now.
+	--> Pack and Card: Variant draws that part set's computer as the icon.
 	Hours: number?,
 	Variant: string?,
 
-	--> Bundle: the desk sets and the employees the server hands out
+	--> Pack: the desk sets, the employees and the cash the server hands out
 	Contents: { DeskSet }?,
 	Employee: string?,
 	Employees: number?,
+	Bonus: number?,
 
 	--> Feature: the server luck tiers, bought lowest to highest as the server's luck rises
 	Tiers: { Tier }?,
@@ -82,6 +85,27 @@ local Icons = {
 
 --> The colours the rows were drawn in stay as drawn; a name here only recolours when given.
 local Gradients: { [string]: { Color3 } } = {
+	--> the blue the pack was first drawn in; the row in the place now carries Pro's green
+	Starter = {
+		Color3.fromRGB(0, 255, 255),
+		Color3.fromRGB(0, 128, 255),
+		Color3.fromRGB(0, 193, 255),
+	},
+	Pro = {
+		Color3.fromRGB(150, 255, 60),
+		Color3.fromRGB(0, 190, 90),
+		Color3.fromRGB(120, 255, 120),
+	},
+	Executive = {
+		Color3.fromRGB(220, 120, 255),
+		Color3.fromRGB(120, 0, 220),
+		Color3.fromRGB(255, 140, 255),
+	},
+	CEO = {
+		Color3.fromRGB(255, 235, 80),
+		Color3.fromRGB(255, 150, 0),
+		Color3.fromRGB(255, 245, 140),
+	},
 	Founder = {
 		Color3.fromRGB(255, 0, 0),
 		Color3.fromRGB(255, 191, 0),
@@ -93,10 +117,11 @@ local Gradients: { [string]: { Color3 } } = {
 }
 
 local Layout: { Entry } = {
-	--> Bundles. The starter sits on top for the day it is on offer, the rest stay.
+	--> Packs. The starter sits on top for the day it is on offer, the rest stay.
 	{ Template = "Header", Anchor = "Packs", Title = "Packs" },
 	{
-		Template = "Bundle",
+		Template = "Pack",
+		Gradient = "Starter",
 		Key = "Starter",
 		Kind = "Product",
 		Id = 0,
@@ -104,49 +129,60 @@ local Layout: { Entry } = {
 		Once = true,
 		Timed = true,
 		Title = "Starter Pack!",
+		Description = "2 Steampunk desks, 2 Hamsters and $10K!",
 		Variant = "Steampunk",
 		Contents = { { Variant = "Steampunk", Sets = 2 } },
 		Employee = "Hamster",
 		Employees = 2,
+		Bonus = 10000,
 	},
 	{
-		Template = "Bundle",
+		Template = "Pack",
+		Gradient = "Pro",
 		Key = "Pro",
 		Kind = "Product",
 		Id = 0,
 		Price = 399,
 		Title = "Pro Pack!",
 		Subtitle = "4 desks + 4 workers",
+		Description = "4 Space desks, 4 Shark Bosses and $250K!",
 		Variant = "Space",
 		Contents = { { Variant = "Space", Sets = 4 } },
 		Employee = "Shark Boss",
 		Employees = 4,
+		Bonus = 250000,
 	},
 	{
-		Template = "Bundle",
+		Template = "Pack",
+		Gradient = "Executive",
 		Key = "Executive",
 		Kind = "Product",
 		Id = 0,
 		Price = 999,
 		Title = "Executive Pack!",
 		Subtitle = "8 desks + 8 workers",
+		Description = "8 Galaxy desks, 8 MrBossys and $1.5M!",
 		Variant = "Galaxy",
 		Contents = { { Variant = "Galaxy", Sets = 8 } },
 		Employee = "MrBossy",
 		Employees = 8,
+		Bonus = 1500000,
 	},
 	{
-		Template = "Bundle",
+		Template = "Pack",
+		Gradient = "CEO",
 		Key = "CEO",
 		Kind = "Product",
 		Id = 0,
 		Price = 2999,
 		Title = "CEO Pack!",
 		Subtitle = "24 desks + 16 workers",
+		Description = "24 Galaxy desks, 16 Mr Moneys and $8M!",
 		Variant = "Galaxy",
-		Contents = { { Variant = "Galaxy", Sets = 16 }, { Variant = "Space", Sets = 8 } },
+		Contents = { { Variant = "Galaxy", Sets = 24 } },
 		Employee = "Mr Money",
 		Employees = 16,
+		Bonus = 8000000,
 	},
 
 	--> Everyone in the server gets it and the buyer's name goes on the banner. One row: it
@@ -285,47 +321,6 @@ local Layout: { Entry } = {
 			{ Key = "Cash6", Id = 0, Price = 249, Multiplier = 8 },
 		},
 	},
-	--> Time skips: the player's own income for N hours, banked now. The card's title is the cash.
-	{
-		Template = "Card",
-		Key = "Skip1h",
-		Kind = "Product",
-		Id = 0,
-		Price = 19,
-		Description = "1 hour of income!",
-		Icon = Icons.Cash,
-		Hours = 1,
-	},
-	{
-		Template = "Card",
-		Key = "Skip8h",
-		Kind = "Product",
-		Id = 0,
-		Price = 49,
-		Description = "8 hours of income!",
-		Icon = Icons.Cash,
-		Hours = 8,
-	},
-	{
-		Template = "Card",
-		Key = "Skip1d",
-		Kind = "Product",
-		Id = 0,
-		Price = 99,
-		Description = "A day of income!",
-		Icon = Icons.Cash,
-		Hours = 24,
-	},
-	{
-		Template = "Card",
-		Key = "Skip3d",
-		Kind = "Product",
-		Id = 0,
-		Price = 249,
-		Description = "3 days of income!",
-		Icon = Icons.Cash,
-		Hours = 72,
-	},
 	{
 		Template = "Card",
 		Key = "Pad",
@@ -335,6 +330,47 @@ local Layout: { Entry } = {
 		Title = "+1 Roll Pad",
 		Description = "One more pad, up to 9!",
 		Icon = Icons.Ticket,
+	},
+	--> Time skips: the player's own income for N hours, banked now. The card's number is the cash.
+	{
+		Template = "CashCard",
+		Key = "Skip1h",
+		Kind = "Product",
+		Id = 0,
+		Price = 19,
+		Description = "1 hour of income, right now!",
+		Icon = Icons.Cash,
+		Hours = 1,
+	},
+	{
+		Template = "CashCard",
+		Key = "Skip8h",
+		Kind = "Product",
+		Id = 0,
+		Price = 49,
+		Description = "8 hours of income, right now!",
+		Icon = Icons.Cash,
+		Hours = 8,
+	},
+	{
+		Template = "CashCard",
+		Key = "Skip1d",
+		Kind = "Product",
+		Id = 0,
+		Price = 99,
+		Description = "A day of income, right now!",
+		Icon = Icons.Cash,
+		Hours = 24,
+	},
+	{
+		Template = "CashCard",
+		Key = "Skip3d",
+		Kind = "Product",
+		Id = 0,
+		Price = 249,
+		Description = "3 days of income, right now!",
+		Icon = Icons.Cash,
+		Hours = 72,
 	},
 }
 

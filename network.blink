@@ -49,12 +49,28 @@ scope Items {
 		}
 	}
 
+	-- puts what is in hand onto one desk: a part is swapped onto its slot, an employee is sat
+	-- down at a desk with nobody at it. The server decides which off what it says is held.
+	-- False means it refused and the hands are still full.
 	function Replace {
 		Yield: Promise,
-		-- the desk slot the held part is being swapped onto
+		-- the desk the held thing is going onto
 		Data: struct {
 			Floor: u8(1..16),
 			Slot: u8(1..16)
+		},
+		Return: boolean
+	}
+
+	-- rerolls one part of one desk, off the button floating where that part sits. What is named is
+	-- the component, not the variant: the slot decides which of the three is being rolled and the
+	-- server decides what quality comes out of it.
+	function RollSlot {
+		Yield: Promise,
+		Data: struct {
+			Floor: u8(1..16),
+			Slot: u8(1..16),
+			Component: string(1..20)
 		},
 		Return: struct {
 			Component: string(1..20),
@@ -62,23 +78,99 @@ scope Items {
 		}
 	}
 
-	-- cancels a pickup: the held part is given up rather than placed, so it goes nowhere. False if
-	-- there was nothing in hand to begin with.
-	function Drop {
+	-- puts what is in hand away in the inventory instead of onto a desk. A stolen part has to be
+	-- secured first, which is the server seeing the thief standing in their own base. False if
+	-- there was nothing in hand or the inventory is full.
+	function Stash {
 		Yield: Promise,
+		Return: boolean
+	}
+
+	-- takes one thing out of the inventory into the hands, by its position in the list, part or
+	-- employee. The server refuses with something already in hand; false means the slot was empty.
+	function Equip {
+		Yield: Promise,
+		Data: u8(1..255),
 		Return: boolean
 	}
 }
 
 scope Stealing {
+	-- lifts the employee off a desk in the base the caller is standing in. Whose base that is
+	-- comes from the server's own sweep, never from here: the client only names the desk. The
+	-- employee goes into the arms tagged stolen, and stays tagged until the thief is seen inside
+	-- their own base. Parts are never stolen: they stay on the desk.
+	function Steal {
+		Yield: Promise,
+		Data: struct {
+			Owner: Player,
+			Floor: u8(1..16),
+			Slot: u8(1..16)
+		},
+		Return: struct {
+			Name: string(1..20),
+			Type: string(1..20)
+		}
+	}
+}
 
+scope Visiting {
+	-- one desk of somebody else's base: its parts, and whoever is sat at it. A slot never rolled
+	-- is left out, and so are both employee fields when the chair is empty.
+	struct Desk {
+		Floor: u8(1..16),
+		Slot: u8(1..16),
+		Computer: string(1..20)?,
+		Keyboard: string(1..20)?,
+		Monitor: string(1..20)?,
+		Employee: string(1..20)?,
+		EmployeeName: string(1..20)?
+	}
+
+	-- every desk standing in a base, sent to a player the moment the server sees them walk into
+	-- it. Nothing about anyone's base is sent to anyone standing outside it.
+	event Entered {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: struct {
+			Owner: Player,
+			Desks: Desk[0..256]
+		}
+	}
+
+	-- one desk of the base being stood in changing under the visitor: a part rolled, stolen or put
+	-- back, or the desk itself going. Removed means the desk is gone and Desk carries only where it
+	-- stood.
+	event DeskChanged {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: struct {
+			Owner: Player,
+			Desk: Desk,
+			Removed: boolean
+		}
+	}
+
+	-- the base whose desks the visitor was shown, on the way out of it or when its owner leaves
+	event Left {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: Player
+	}
 }
 
 scope Purchases {
-	event BuyDesk {
-		From: Client,
-		Type: Reliable,
-		Call: SingleAsync,
+	-- buying the next desk. Which one is not the client's to say: the server takes the lowest free
+	-- slot on the lowest floor owned, or the first slot of the floor above when every owned floor
+	-- is full, which opens that floor along with the desk. It charges off how many desks are
+	-- already standing; false means it refused, which is either not enough cash or a plot with
+	-- nothing left on it to buy.
+	function BuyDesk {
+		Yield: Promise,
+		Return: boolean
 	}
 }
 
@@ -141,5 +233,117 @@ scope Employees {
 		Yield: Promise,
 		Data: UID,
 		Return: boolean
+	}
+
+	-- the seat of one already sat at a desk. The server checks the desk is the caller's and holds
+	-- somebody; false means it refused. The refund is worked out on the server off the type.
+	function Sell {
+		Yield: Promise,
+		Data: struct {
+			Floor: u8,
+			Slot: u8
+		},
+		Return: boolean
+	}
+
+	-- one seat to another, both the caller's. The target has to be a standing desk; somebody
+	-- already sat there swaps into the seat being left. False means it refused and the worker
+	-- stayed put.
+	function Move {
+		Yield: Promise,
+		Data: struct {
+			FromFloor: u8,
+			FromSlot: u8,
+			ToFloor: u8,
+			ToSlot: u8
+		},
+		Return: boolean
+	}
+}
+
+scope Upgrades {
+	-- the id of the node being bought, as it is keyed in Configs.Upgrades. The server checks the
+	-- price, the parent and that it is not already owned; false means it refused.
+	function Buy {
+		Yield: Promise,
+		Data: string(1..40),
+		Return: boolean
+	}
+}
+
+scope Shop {
+	-- Studio only: buys a product that has no id on the Creator Hub yet, by its key in
+	-- Configs.Products, so the shop can be played through before the products exist. The server
+	-- refuses outside Studio and for anything that already has an id; false means it refused.
+	function DevBuy {
+		Yield: Promise,
+		Data: string(1..40),
+		Return: boolean
+	}
+}
+
+scope Floors {
+	-- moving to one floor of your own plot. The move is the server's: it checks the floor is owned
+	-- and does the pivot itself, so the anti-cheat can tell this apart from a client teleporting.
+	-- False means it refused and nobody moved.
+	function Travel {
+		Yield: Promise,
+		Data: u8(1..16),
+		Return: boolean
+	}
+}
+
+scope Notices {
+	-- somebody walked out of your base with one of your employees: who, and who they took. Sent
+	-- to the victim only, the moment the lift succeeds, so they can go after them.
+	event Stolen {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: struct {
+			Thief: Player,
+			Name: string(1..20),
+			Type: string(1..20)
+		}
+	}
+}
+
+scope Gears {
+	-- a gear from Configs.Gears, paid for once with cash and kept in the save for good
+	function Buy {
+		Yield: Promise,
+		Data: string(1..40),
+		Return: boolean
+	}
+
+	-- puts an owned gear in the backpack, or takes it out again. False when the slots are full
+	function Equip {
+		Yield: Promise,
+		Data: struct {
+			Key: string(1..40),
+			On: boolean
+		},
+		Return: boolean
+	}
+
+	-- the tool in hand was swung, thrown, placed or drunk. Aim is where the mouse was for the ones
+	-- that are thrown; the server decides what, if anything, happens
+	event Use {
+		From: Client,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: struct {
+			Key: string(1..40),
+			Aim: vector?
+		}
+	}
+
+	-- a gear landed on this player: a bat, a blast, a trap. Only the kick for the screen; the
+	-- fling or the freeze itself is already done on the server
+	event Hit {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: f32
 	}
 }

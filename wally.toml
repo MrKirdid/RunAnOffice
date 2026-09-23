@@ -16,6 +16,8 @@ Promise = "evaera/promise@4.0.0"
 TypedPromise = "howmanysmall/typed-promise@4.0.6"
 Charm = "littensy/charm@0.11.0"
 Reflex = "littensy/reflex@4.3.1"
-Kmdr = "mrkirdid/kmdr@0.1.0"
 Kore = "mrkirdid/kore@0.1.13"
-Proximityprompt = "mrkirdid/proximityprompt@0.1.1"
+Proximityprompt = "mrkirdid/proximityprompt@0.1.2"
+
+[server-dependencies]
+Cmdr = "evaera/cmdr@1.13.0"

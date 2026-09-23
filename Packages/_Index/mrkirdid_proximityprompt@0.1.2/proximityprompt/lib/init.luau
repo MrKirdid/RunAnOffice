@@ -1,0 +1,239 @@
+-- Services
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+-- Imports
+local Packages = script:FindFirstAncestorOfClass("Folder")
+local NewInputLabel = require(script.NewInputLabel)
+local NewInputConnections = require(script.NewInputConnections)
+local BuildTextLabels = require(script.BuildTextLabels)
+local BuildFrames = require(script.BuildFrames)
+local UpdateUIFromPrompt = require(script.UpdateUIFromPrompt)
+local Fusion = require(Packages.Fusion)
+local New = Fusion.New
+local Hydrate = Fusion.Hydrate
+local Value = Fusion.Value
+local OnEvent = Fusion.OnEvent
+local Cleanup = Fusion.cleanup
+local Children = Fusion.Children
+local Spring = Fusion.Spring
+local Computed = Fusion.Computed
+
+-- Variables
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local ProximityController = {}
+
+--[[
+	@docs GetUpdateCallback
+	@args ...any
+	@desc Returns a callback that updates the UI from the prompt
+	@return function
+]]
+local function GetUpdateCallback(...)
+	local Args = { ... }
+
+	return function()
+		UpdateUIFromPrompt(unpack(Args))
+	end
+end
+
+--[[
+	@docs GetScreenGui
+	@args nil
+	@desc Returns the ScreenGui that the prompts will be parented to.
+	@return ScreenGui
+]]
+local function GetScreenGui()
+	local ScreenGui = PlayerGui:FindFirstChild("ProximityPrompts")
+
+	if not ScreenGui then
+		ScreenGui = New("ScreenGui")({
+			Name = "ProximityPrompts",
+			ResetOnSpawn = false,
+			IgnoreGuiInset = true,
+			Parent = PlayerGui,
+		})
+	end
+
+	return ScreenGui
+end
+
+--[[
+	@docs CreatePrompt
+	@args ProximityPrompt, Enum.ProximityPromptInputType, ScreenGui
+	@desc Creates a prompt and returns a cleanup function.
+	@return function
+]]
+local function CreatePrompt(prompt: ProximityPrompt, inputType: Enum.ProximityPromptInputType, gui: ScreenGui)
+	-- Build state objects
+	local InputFrameScaleFactor = inputType == Enum.ProximityPromptInputType.Touch and 1.6 or 1.33
+	local CurrentFrameScaleFactor = Value(1)
+	local PromptTransparency = Value(1)
+	local ButtonHeldDown = Value(false)
+	local AspectRatioValue = Value(1)
+	local CurrentBarSize = Value(0)
+
+	-- Create input connections
+	local InputConnections: { RBXScriptConnection } = NewInputConnections({
+		prompt = prompt,
+		ButtonHeldDown = ButtonHeldDown,
+		CurrentBarSize = CurrentBarSize,
+		CurrentFrameScaleFactor = CurrentFrameScaleFactor,
+		PromptTransparency = PromptTransparency,
+		InputFrameScaleFactor = InputFrameScaleFactor,
+	})
+
+	-- Build the prompt UI
+	local PromptUI = New("BillboardGui")({
+		Name = "Prompt",
+		AlwaysOnTop = true,
+		Parent = gui,
+		Adornee = prompt.Parent,
+
+		StudsOffset = Spring(
+			Computed(function()
+				return PromptTransparency:get() < 1 and Vector3.new(0, 0, 0) or Vector3.new(-1, 0, 0)
+			end),
+			15,
+			0.5
+		),
+	}) :: BillboardGui
+
+	local Frame: CanvasGroup, ResizeableInputFrame: Frame = unpack(
+		BuildFrames(
+			PromptUI,
+			ButtonHeldDown,
+			PromptTransparency,
+			AspectRatioValue,
+			CurrentBarSize,
+			CurrentFrameScaleFactor
+		)
+	)
+
+	local ActionText: TextLabel, ObjectText: TextLabel = unpack(BuildTextLabels(Frame, ButtonHeldDown))
+
+	Hydrate(ResizeableInputFrame)({
+		[Children] = NewInputLabel(inputType, prompt),
+	})
+
+	-- Include support for clickable prompts and mobile input.
+	-- The hold is tied to the InputObject that started it and released through
+	-- UserInputService, not the button's own InputEnded. A GuiObject's InputEnded also
+	-- fires when a finger drifts off it, and the billboard slides around under the finger
+	-- as the camera moves, so on touch the button's own event cancels the hold early.
+	local HeldInput: InputObject? = nil
+
+	local function EndHold()
+		if not HeldInput then
+			return
+		end
+
+		HeldInput = nil
+		prompt:InputHoldEnd()
+	end
+
+	if inputType == Enum.ProximityPromptInputType.Touch or prompt.ClickablePrompt then
+		Hydrate(PromptUI)({
+			Active = true,
+
+			[Children] = {
+				New("TextButton")({
+					BackgroundTransparency = 1,
+					TextTransparency = 1,
+					Size = UDim2.fromScale(1, 1),
+
+					[OnEvent("InputBegan")] = function(input: InputObject)
+						if HeldInput then
+							return
+						end
+
+						if
+							(
+								input.UserInputType == Enum.UserInputType.Touch
+								or input.UserInputType == Enum.UserInputType.MouseButton1
+							) and input.UserInputState == Enum.UserInputState.Begin
+						then
+							HeldInput = input
+							prompt:InputHoldBegin()
+						end
+					end,
+				}),
+			},
+		})
+
+		InputConnections[#InputConnections + 1] = UserInputService.InputEnded:Connect(function(input: InputObject)
+			if input == HeldInput then
+				EndHold()
+			end
+		end)
+	end
+
+	-- Create update callback
+	local UpdateCallback = GetUpdateCallback(prompt, PromptUI, AspectRatioValue, ActionText, ObjectText)
+
+	InputConnections[#InputConnections + 1] = prompt.Changed:Connect(UpdateCallback)
+	UpdateCallback()
+
+	-- Init animation
+	PromptTransparency:set(0)
+
+	-- Cleanup callback
+	return function()
+		EndHold()
+		Cleanup(InputConnections)
+		PromptTransparency:set(1)
+		task.wait(2)
+		PromptUI:Destroy()
+	end
+end
+
+--[[
+	@docs ForceCustomStyle
+	@desc Sets a ProximityPrompt to Custom style so the default UI never appears.
+]]
+local function ForceCustomStyle(prompt: ProximityPrompt)
+	if prompt.Style == Enum.ProximityPromptStyle.Default then
+		prompt.Style = Enum.ProximityPromptStyle.Custom
+	end
+end
+
+--[[
+	@docs Init
+	@args nil
+	@desc Initializes ProximityController. Call from a LocalScript.
+	@return nil
+]]
+function ProximityController.Init()
+	-- Pre-set all existing prompts to Custom so the default UI never flashes
+	for _, desc in ipairs(workspace:GetDescendants()) do
+		if desc:IsA("ProximityPrompt") then
+			ForceCustomStyle(desc)
+		end
+	end
+
+	-- Catch any prompts added later (before PromptShown fires)
+	workspace.DescendantAdded:Connect(function(desc)
+		if desc:IsA("ProximityPrompt") then
+			ForceCustomStyle(desc)
+		end
+	end)
+
+	Hydrate(ProximityPromptService)({
+		[OnEvent("PromptShown")] = function(prompt, inputType)
+			ForceCustomStyle(prompt)
+
+			local gui = GetScreenGui()
+
+			local cleanupFunction = CreatePrompt(prompt, inputType, gui)
+
+			prompt.PromptHidden:Wait()
+
+			cleanupFunction()
+		end,
+	})
+end
+
+return ProximityController

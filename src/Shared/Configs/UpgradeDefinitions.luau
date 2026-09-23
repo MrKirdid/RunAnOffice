@@ -60,6 +60,14 @@ local function AddMultiplier(Name: string, Amount: number)
 	end
 end
 
+local function AddGearSlot(Amount: number)
+	return function(Context: Context)
+		Context.Data.GearSlots(function(Current: number)
+			return Current + Amount
+		end)
+	end
+end
+
 local function AddDefense(Amount: number)
 	return function(Context: Context)
 		Context.Data.Defense(function(Current: number)
@@ -92,6 +100,15 @@ local Definitions: { [string]: Definition } = {
 	--> Faster Employees III
 	NewNode2 = { Effect = "Employees walk 35% faster", OnPurchase = AddMultiplier("EmployeeSpeed", 0.35) },
 
+	--> Walking: the player's own speed, applied to the character by MonetizationService with the
+	--> Sprint pass on top of it.
+	SpeedI = { Effect = "You walk 20% faster", OnPurchase = AddMultiplier("WalkSpeed", 0.2) },
+	SpeedII = { Effect = "You walk 30% faster", OnPurchase = AddMultiplier("WalkSpeed", 0.3) },
+
+	--> Gear: how many gears may be equipped at once. Two to start, in PlayerData.
+	GearSlotsI = { Effect = "+1 gear slot", OnPurchase = AddGearSlot(1) },
+	GearSlotsII = { Effect = "+1 gear slot", OnPurchase = AddGearSlot(1) },
+
 	--> Rolling: how quickly the spin resolves, and how many pads it spins across.
 	SmartRoller = { Effect = "Rolls spin 15% faster", OnPurchase = AddMultiplier("RollSpeed", 0.15) },
 	FasterRolls = { Effect = "Rolls spin 20% faster", OnPurchase = AddMultiplier("RollSpeed", 0.2) },
@@ -110,8 +127,8 @@ local Definitions: { [string]: Definition } = {
 	--> Final Roller
 	NewNode8 = { Effect = "+2 roll pads", OnPurchase = AddPads(2) },
 
-	--> Defense: the purple branch. Stealing is not built yet, so this only banks the level for
-	--> BaseLockingService to read once it is.
+	--> Defense: the purple branch. Stealing is in, but what defense does against it is not yet, so
+	--> this only banks the level for BaseLockingService to read once it is.
 	NewNode = { Effect = "+1 base defense", OnPurchase = AddDefense(1) },
 	NewNode3 = { Effect = "+2 base defense", OnPurchase = AddDefense(2) },
 	NewNode4 = { Effect = "+3 base defense", OnPurchase = AddDefense(3) },

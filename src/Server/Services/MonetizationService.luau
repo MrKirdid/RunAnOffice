@@ -1,6 +1,7 @@
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage.Shared
 
@@ -8,6 +9,7 @@ local NameList = require(Shared.Configs.NameList)
 local DeskData = require(Shared.Utilities.DeskData)
 local DeskPurchase = require(Shared.Utilities.DeskPurchase)
 local EmployeeService = require(script.Parent.EmployeeService)
+local NetworkingServer = require(Shared.Networking.networkingServer)
 local PlayerData = require(Shared.PlayerData).server
 local PlotService = require(script.Parent.PlotService)
 local RevenueService = require(script.Parent.RevenueService)
@@ -24,7 +26,15 @@ local Store = require(Shared.Utilities.Store)
 
 --> What the player walks at, and with Sprint Shoes.
 local BaseWalkSpeed = 16
+
+--> A status on the player, slowed by goo or sped up by a coil, multiplies the whole thing. Written
+--> by StatusService as an attribute, so nothing here has to know what did it.
+local SpeedAttribute = "SpeedFactor"
 local SprintMultiplier = 2.5
+
+--> Everyone walks this much faster than the default out of the box, before the tree or the pass:
+--> the plot is wide and the street is a walk from it, and the stock speed made both a trudge.
+local StockMultiplier = 1.7
 
 --> VIP's welcome: a day of income at the rate the plot makes when it is bought, and one pad.
 local VipBonusHours = 24
@@ -57,7 +67,13 @@ local function ApplyWalkSpeed(Player: Player, Data: any)
 		return
 	end
 
-	Humanoid.WalkSpeed = if Store.Owns(Data, "Sprint") then BaseWalkSpeed * SprintMultiplier else BaseWalkSpeed
+	--> the tree's multiplier under the pass, so Sprint Shoes are still 2.5x whatever was bought
+	local Base = BaseWalkSpeed * StockMultiplier * Data.Multipliers.WalkSpeed()
+
+	local Factor = Player:GetAttribute(SpeedAttribute)
+	local Status = if type(Factor) == "number" then Factor else 1
+
+	Humanoid.WalkSpeed = (if Store.Owns(Data, "Sprint") then Base * SprintMultiplier else Base) * Status
 end
 
 --> A desk that holds no parts at all, lowest first, or nil.
@@ -157,6 +173,15 @@ function MonetizationService:GrantPack(Player: Player, Data: any, Entry: Entry):
 
 	if Entry.Employee and Entry.Employees then
 		self:GrantEmployees(Data, Entry.Employee, Entry.Employees)
+	end
+
+	--> the cash printed in the pack's third box
+	local Bonus = Entry.Bonus
+
+	if Bonus and Bonus > 0 then
+		Data.Cash(function(Current: number)
+			return Current + Bonus
+		end)
 	end
 
 	return true
@@ -369,6 +394,15 @@ function MonetizationService:_HandlePlayer(Player: Player)
 
 		ApplyWalkSpeed(Player, Data)
 
+		--> the tree's speed nodes write the multiplier, and the character is walking while they do
+		Data.Multipliers.WalkSpeed.Changed(function()
+			ApplyWalkSpeed(Player, Data)
+		end)
+
+		Player:GetAttributeChangedSignal(SpeedAttribute):Connect(function()
+			ApplyWalkSpeed(Player, Data)
+		end)
+
 		--> the starter's day starts on the first join and is stamped once, so a rejoin reads the
 		--> same deadline rather than a fresh one
 		if Data.Store.StarterExpiresAt() == 0 then
@@ -385,10 +419,56 @@ function MonetizationService:_HandlePlayer(Player: Player)
 	end)
 end
 
+--> The Creator Hub id a key sells under, whatever kind of thing it is; 0 for one not made yet.
+local function IdOf(Key: string): number
+	local Rung = Store.Rung(Key)
+
+	if Rung then
+		return Rung.Id
+	end
+
+	local Tier = Store.Tier(Key)
+
+	if Tier then
+		return Tier.Id
+	end
+
+	local Entry = Store.Entry(Key)
+
+	return if Entry then Entry.Id or 0 else 0
+end
+
+--> Studio only: a product with no id yet is granted as if Roblox had taken the Robux, so the
+--> shop can be played through before the products exist. Anything with a real id goes through
+--> Roblox like anywhere else, and outside Studio this does nothing at all.
+function MonetizationService:DevBuy(Player: Player, Key: string): boolean
+	local Data = PlayerData[Player]
+
+	if not RunService:IsStudio() or not Data then
+		return false
+	end
+
+	if IdOf(Key) ~= 0 then
+		return false
+	end
+
+	local Granted = self:Grant(Player, Data, Key)
+
+	if Granted then
+		print(`[Monetization] Studio: granted "{Key}" to {Player.Name} without a product id`)
+	end
+
+	return Granted
+end
+
 function MonetizationService:Init()
 	MarketplaceService.ProcessReceipt = function(Receipt)
 		return self:ProcessReceipt(Receipt)
 	end
+
+	NetworkingServer.Shop.DevBuy.On(function(Player: Player, Key: string)
+		return self:DevBuy(Player, Key)
+	end)
 
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(
 		function(Player: Player, PassId: number, Purchased: boolean)

@@ -70,17 +70,26 @@ local HEADER_SIZE = UDim2.fromScale(0.45, 0.25)
 local ALERT_SIZE = UDim2.fromScale(0.3, 0.3)
 local STROKE_THICKNESS = 0.14
 
-local SIZE_SPEED = 30
-local SIZE_DAMPING = 0.58
-local ROTATION_SPEED = 20
-local ROTATION_DAMPING = 0.42
+--> Driven fast and damped hard enough that the overshoot is one clear beat rather than a long
+--> crawl back to size. A node that is still visibly moving after it has arrived reads as a stall.
+local SIZE_SPEED = 32
+local SIZE_DAMPING = 0.66
+local ROTATION_SPEED = 28
+local ROTATION_DAMPING = 0.5
 
 --> the kick given to the size spring as a node lands, and the tilt it unwinds from
 local SPAWN_PUNCH = 2.6
 local SPAWN_TILT = -22
 
+--> velocity put on the rotation spring when a press is refused. it wobbles in place and settles,
+--> which reads as "no" without moving the node anywhere
+local DENY_SHAKE = 350
+
 local GLOW_TRANSPARENCY = 1
-local HIGHLIGHT_TRANSPARENCY = 1
+
+--> what marks the node you could buy right now. it was 1, which switched the glow off entirely and
+--> left an affordable node looking the same as one you cannot pay for yet
+local HIGHLIGHT_TRANSPARENCY = 0.4
 local MAX_NOTIFICATION_COUNT = 9
 
 local NUMBER_SYMBOLS = { "K", "M", "B", "T", "Q" }
@@ -623,7 +632,7 @@ function NodeConstructor.setPrice(self: Node, price: Price?)
 		return
 	end
 
-	self:setPriceText(formatLargeNumber(price.quantity))
+	self:setPriceText("$" .. formatLargeNumber(price.quantity))
 	self:setPriceCurrencyIcon(price.currencyIcon)
 	self._instances.price.Visible = true
 end
@@ -874,6 +883,19 @@ function NodeConstructor._setPressed(self: Node, isPressed: boolean)
 
 	--> a release pushes back out rather than easing, so a tap feels like it snaps
 	self._size:addVelocity(UDim2.fromScale(SPAWN_PUNCH / 2, SPAWN_PUNCH / 2))
+end
+
+--> A kick on the size spring with the goal left alone, for a node that has just been bought. The
+--> node is already where it belongs; only the speed it settles at changes.
+function NodeConstructor.punch(self: Node, amount: number?)
+	local scale = amount or SPAWN_PUNCH
+
+	self._size:addVelocity(UDim2.fromScale(scale, scale))
+end
+
+--> The refusal: rotation rather than size, so nothing grows and nothing moves.
+function NodeConstructor.nudge(self: Node, amount: number?)
+	self._rotation:addVelocity(amount or DENY_SHAKE)
 end
 
 function NodeConstructor._disableInput(self: Node)

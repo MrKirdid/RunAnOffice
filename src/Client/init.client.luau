@@ -20,6 +20,12 @@ local function RenderTree(): Folder
 		end
 	end
 
+	for _, AssetId in Renders.Employees do
+		local Label = Instance.new("ImageLabel")
+		Label.Image = AssetId
+		Label.Parent = Tree
+	end
+
 	Tree.Parent = script
 
 	return Tree

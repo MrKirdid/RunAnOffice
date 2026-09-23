@@ -41,11 +41,28 @@ local ZoomActionName = "UpgradeTreeZoom"
 --> above the camera scripts, so a wheel over the tree does not also pull the camera in
 local ZoomActionPriority = Enum.ContextActionPriority.High.Value + 1000
 
+--> how many views have been made, so each binds its own wheel action rather than replacing the
+--> last one's
+local Applied = 0
+
 export type Handle = {
 	SetZoom: (Zoom: number) -> (),
 	GetZoom: () -> number,
 	HasPanned: () -> boolean,
-	FitTo: (Min: Vector2, Max: Vector2) -> (),
+	FitTo: (Min: Vector2, Max: Vector2, ZoomOut: number?) -> (),
+}
+
+--> Where a point on the screen lands in the window's own coordinates, or nil for a point that is
+--> not over the window at all. A screen gui shares its coordinates with the mouse, so the default
+--> only corrects for the top bar; a gui on a part in the world has to be found with a ray.
+export type Project = (Screen: Vector2) -> Vector2?
+
+export type Options = {
+	Project: Project?,
+
+	--> how far in this view may go, in place of the module's ceiling. the board is read from
+	--> across the room, so it gets more than the menu
+	MaxZoom: number?,
 }
 
 --> share of the window the fitted content is allowed to fill
@@ -72,10 +89,16 @@ end
 
 local PanZoom = {}
 
-function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
+function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject, Options: Options?): Handle
 	local Space = Canvas.Parent :: GuiObject
-	local Screen = Canvas:FindFirstAncestorWhichIsA("ScreenGui")
+	local Screen = Canvas:FindFirstAncestorWhichIsA("LayerCollector")
 	local BaseScale = Vector2.new(Canvas.Size.X.Scale, Canvas.Size.Y.Scale)
+	local Project = Options and Options.Project
+	local Ceiling = (Options and Options.MaxZoom) or MaxZoom
+
+	Applied += 1
+
+	local ActionName = ZoomActionName .. Applied
 
 	local DragInput: InputObject? = nil
 	local LastPoint = Vector2.zero
@@ -83,7 +106,7 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 	local Velocity = Vector2.zero
 	local PinchZoom: number? = nil
 	local Travelled = 0
-	local HoverPoint = Vector2.zero
+	local HoverPoint: Vector2? = nil
 	local CameraZoomRange: Vector2? = nil
 
 	local function GetWindowCenter(): Vector2
@@ -98,11 +121,19 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 	--> a screen that ignores the inset shares its coordinates with the mouse; one that does not is
 	--> pushed down by the top bar and has to be corrected for
 	local function GetInset(): Vector2
-		if Screen and Screen.IgnoreGuiInset then
+		if Screen and Screen:IsA("ScreenGui") and Screen.IgnoreGuiInset then
 			return Vector2.zero
 		end
 
 		return GuiService:GetGuiInset()
+	end
+
+	local function ToWindow(Position: Vector2): Vector2?
+		if Project then
+			return Project(Position)
+		end
+
+		return Position - GetInset()
 	end
 
 	local function GetCanvasSize(Zoom: number): Vector2
@@ -123,7 +154,7 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 	--> the spring output is clamped as well as the goal, so an overshoot can never carry the canvas
 	--> past an edge
 	local function Render()
-		local Zoom = math.clamp(Peek(ZoomSpring), MinZoom, MaxZoom)
+		local Zoom = math.clamp(Peek(ZoomSpring), MinZoom, Ceiling)
 		local CanvasSize = GetCanvasSize(Zoom)
 		local Center = Clamp(Peek(CenterSpring), Zoom)
 		local SpaceSize = Space.AbsoluteSize
@@ -147,7 +178,7 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 	--> zooms around a point, so whatever sits under the cursor or between the fingers stays put
 	local function SetZoom(Target: number, Focus: Vector2)
 		local Current = Peek(ZoomGoal)
-		local Next = math.clamp(Target, MinZoom, MaxZoom)
+		local Next = math.clamp(Target, MinZoom, Ceiling)
 
 		if Next == Current then
 			return
@@ -161,15 +192,19 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 		return (Screen == nil or Screen.Enabled) and Window.AbsoluteSize.X > 0
 	end
 
-	local function IsInsideWindow(Point: Vector2): boolean
+	local function IsInsideWindow(Point: Vector2?): boolean
+		if not Point then
+			return false
+		end
+
 		local Min = Window.AbsolutePosition
 		local Max = Min + Window.AbsoluteSize
 
 		return Point.X >= Min.X and Point.X <= Max.X and Point.Y >= Min.Y and Point.Y <= Max.Y
 	end
 
-	local function GetPoint(Input: InputObject): Vector2
-		return Vector2.new(Input.Position.X, Input.Position.Y) - GetInset()
+	local function GetPoint(Input: InputObject): Vector2?
+		return ToWindow(Vector2.new(Input.Position.X, Input.Position.Y))
 	end
 
 	--> sinking the wheel through ContextActionService only covers the input paths that reach it, so
@@ -219,7 +254,7 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 
 			local Point = GetPoint(Input)
 
-			if not IsInsideWindow(Point) then
+			if not Point or not IsInsideWindow(Point) then
 				return
 			end
 
@@ -236,7 +271,7 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 
 	--> this action only swallows the wheel before the camera scripts reach it -- the zoom itself is
 	--> driven from InputChanged below, because not every input path reaches ContextActionService
-	ContextActionService:BindActionAtPriority(ZoomActionName, function(): Enum.ContextActionResult
+	ContextActionService:BindActionAtPriority(ActionName, function(): Enum.ContextActionResult
 		if not IsActive() or not IsInsideWindow(HoverPoint) then
 			return Enum.ContextActionResult.Pass
 		end
@@ -255,7 +290,7 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 			if Input.UserInputType == Enum.UserInputType.MouseWheel then
 				local Focus = GetPoint(Input)
 
-				if not IsActive() or not IsInsideWindow(Focus) then
+				if not Focus or not IsActive() or not IsInsideWindow(Focus) then
 					return
 				end
 
@@ -280,6 +315,13 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 			end
 
 			local Point = GetPoint(Input)
+
+			--> a drag that has slid off the part the gui is on: the canvas holds where it is until
+			--> the pointer comes back over it
+			if not Point then
+				return
+			end
+
 			local Delta = Point - LastPoint
 			local Clock = os.clock()
 			local Elapsed = math.max(Clock - LastMoveClock, 1 / 240)
@@ -335,7 +377,11 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 				return
 			end
 
-			SetZoom(Started * Scale, GetMidpoint(TouchPositions) - GetInset())
+			local Focus = ToWindow(GetMidpoint(TouchPositions))
+
+			if Focus then
+				SetZoom(Started * Scale, Focus)
+			end
 
 			if State == Enum.UserInputState.End or State == Enum.UserInputState.Cancel then
 				PinchZoom = nil
@@ -347,9 +393,9 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 	table.insert(
 		Scope,
 		UserInputService.PointerAction:Connect(function(_Wheel: number, _Pan: Vector2, Pinch: number)
-			local Focus = UserInputService:GetMouseLocation() - GetInset()
+			local Focus = ToWindow(UserInputService:GetMouseLocation())
 
-			if Pinch == 0 or not IsActive() or not IsInsideWindow(Focus) then
+			if Pinch == 0 or not Focus or not IsActive() or not IsInsideWindow(Focus) then
 				return
 			end
 
@@ -363,7 +409,7 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 	end
 
 	table.insert(Scope, function()
-		ContextActionService:UnbindAction(ZoomActionName)
+		ContextActionService:UnbindAction(ActionName)
 		SetCameraLocked(false)
 	end)
 
@@ -394,7 +440,9 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 
 		--> Min and Max are the content's corners in canvas scale. the zoom that makes it fill the
 		--> window is applied at once rather than sprung, since this runs as the tree opens.
-		FitTo = function(Min: Vector2, Max: Vector2)
+		--> ZoomOut backs off from the fit by that much, for a view that should open wider than the
+		--> content asks for and let the player zoom in themselves
+		FitTo = function(Min: Vector2, Max: Vector2, ZoomOut: number?)
 			local Extent = (Max - Min) * GetCanvasSize(1)
 
 			if Extent.X <= 0 or Extent.Y <= 0 then
@@ -402,7 +450,8 @@ function PanZoom.Apply(Scope: any, Canvas: GuiObject, Window: GuiObject): Handle
 			end
 
 			local Room = Window.AbsoluteSize * FitMargin
-			local Next = math.clamp(math.min(Room.X / Extent.X, Room.Y / Extent.Y), MinZoom, MaxZoom)
+			local Fitted = math.min(Room.X / Extent.X, Room.Y / Extent.Y) / (ZoomOut or 1)
+			local Next = math.clamp(Fitted, MinZoom, Ceiling)
 
 			ZoomGoal:set(Next)
 			ZoomSpring:setPosition(Next)

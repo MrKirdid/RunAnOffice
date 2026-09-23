@@ -6,13 +6,22 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Assets = ReplicatedStorage:WaitForChild("Assets")
 
 local NetworkingClient = require(Shared.Networking.networkingClient)
+local EmployeeMenuController = require(Shared.Controllers.EmployeeMenuController)
+local PayPopupController = require(Shared.Controllers.PayPopupController)
+local SoundController = require(Shared.Controllers.SoundController)
 local PlotController = require(Shared.Controllers.PlotController)
+local DeskData = require(Shared.Utilities.DeskData)
 local DeskPlacements = require(Shared.Utilities.DeskPlacements)
 local EmployeeConfigs = require(Shared.Configs.Employees)
+local Format = require(Shared.Utilities.Format)
 local Tiers = require(Shared.Utilities.Tiers)
 local Offsets = require(Shared.Configs.Offsets)
 local PlayerData = require(Shared.PlayerData).client
+local Revenue = require(Shared.Utilities.Revenue)
 local Rolling = require(Shared.Utilities.Rolling)
+local ScreenShakeController = require(Shared.Controllers.ScreenShakeController)
+local TutorialConfigs = require(Shared.Configs.Tutorial)
+local TutorialController = require(Shared.Controllers.TutorialController)
 
 local ContainerName = "Employees"
 local FallbackModel = "Tie Guy"
@@ -24,11 +33,51 @@ local MaxSnapshots = 16
 local TurnSmoothing = 9
 
 local AnimationFade = 0.2
-local WalkPlaybackSpeed = 1.375
+local WalkPlaybackSpeed = 0.98
 local MoveEpsilon = 0.001
+
+--> Fractions of the base speed each employee is allowed to drift by, drawn once when its track
+--> starts. Small on purpose: enough that two of them side by side are visibly not the same
+--> employee, small enough that nobody reads it as one being buffed.
+local WalkSpeedSpread = 0.06
+local TypeSpeedSpread = 0.1
+
+--> How long a track may wait for its asset before the phase offset is given up on. Only the very
+--> first of a kind ever waits at all; every one after it loads from cache on the same frame.
+local PhaseWaitTimeout = 2
+
+local Variation = Random.new()
+
+local DisplayGap = 0.4
+
+--> Gold on every employee, deliberately off the tier colour: the rarity line already carries the
+--> tier, so the multiplier reads as money instead of repeating it.
+local MultiplierColor = Color3.fromRGB(255, 215, 0)
+
+--> A price is the one line a player acts on, so it is the only green on the card: far enough round
+--> the wheel from the gold above it that the two never read as the same number.
+local CostColor = Color3.fromRGB(88, 255, 128)
 
 local PromptDistance = 14
 local PromptHold = 0
+
+--> Seats filled closer together than this are one event, which is what a swap landing looks like.
+local SeatCueGap = 0.2
+
+--> How close the camera has to be for one at a desk to answer the mouse. Further than the buy
+--> prompt, since a desk is looked at from across the room rather than walked up to.
+local ClickDistance = 40
+
+--> A seat with parts missing from its desk: the employee is sat at nothing, so they are shown
+--> waiting rather than typing at it, and wear this so the desk reads as the problem.
+local IdleName = "Idle"
+local IdleColor = Color3.fromRGB(255, 70, 70)
+local IdleFill = 0.6
+local IdleOutline = 0
+
+--> Where in the typing loop the idle one is held: mid stroke, hands over the keys, so they read
+--> as stopped rather than as never having started.
+local FreezePoint = 0.5
 
 local AnimationFolder = Assets:WaitForChild("Animations"):WaitForChild("Employee")
 
@@ -68,11 +117,46 @@ type Rendered = {
 type Seated = {
 	Model: Model,
 	Stamp: string,
+	Floor: number,
+	Slot: number,
+	Position: Vector3,
+	Head: BasePart,
+
+	--> the typing loop and its sound, held so an emptied desk can stop them and a filled one
+	--> start them again
+	Track: AnimationTrack?,
+	Sound: Sound?,
+	Idle: boolean,
+
+	--> the speed the loop was started at, with its own drift, to hand back after a freeze
+	Speed: number,
+}
+
+--> A seat and what it is paying this tick, which is the only reason anything walks the office.
+type Earner = {
+	Seat: Seated,
+	Rate: number,
 }
 
 local EmployeeController = {
 	Employees = {} :: { [number]: Rendered },
 	Seated = {} :: { [string]: Seated },
+
+	--> when the seated cue last played, so two seats filling together sound once
+	SeatCueClock = 0,
+
+	--> Which desk the next payday sound comes out of. The whole office is paid on one tick, so
+	--> sounding every earner would be a chord once a second; they take it in turns instead.
+	PayCursor = 0,
+
+	--> The balance the last payday sound was played against, so cash going out -- an employee
+	--> bought, a node in the tree unlocked -- is not mistaken for cash coming in.
+	Balance = nil :: number?,
+
+	--> False until the desks a player logs back in to have been walked once. Everyone already at a
+	--> desk is built during that sweep, and a seat sound on each of them is the whole office
+	--> sitting down in the player's ear the moment they arrive.
+	Ready = false,
 }
 
 local function GetContainer(): Folder
@@ -131,14 +215,32 @@ local function BuildDisplay(Name: string, Type: string, Cost: number?): Billboar
 	Frame.RarityLabel.Text = TierName
 	Frame.RarityLabel.TextColor3 = TierColor
 	Frame.MultiplierLabel.Text = FormatValue(if Config then Config.Value else 1) .. "x"
-	Frame.MultiplierLabel.TextColor3 = TierColor
+	Frame.MultiplierLabel.TextColor3 = MultiplierColor
+	Frame.CostLabel.TextColor3 = CostColor
 	Frame.CostLabel.Visible = Cost ~= nil
 
 	if Cost then
-		Frame.CostLabel.Text = "$" .. Cost
+		Frame.CostLabel.Text = Format.Cash(Cost)
 	end
 
 	return Display
+end
+
+--> The head, not the root: the root sits at hip height, so a display hung off it floats over the
+--> chest. Recursive because a rig can bury its head under a hat or an accessory model.
+local function GetHead(Model: Model, Root: BasePart): BasePart
+	local Head = Model:FindFirstChild(HeadName, true)
+
+	return if Head and Head:IsA("BasePart") then Head else Root
+end
+
+--> SizeOffset lifts the whole card clear of its anchor point, and the world space offset raises
+--> that point to the crown, so the card sits above the head rather than across it.
+local function AttachDisplay(Display: BillboardGui, Anchor: BasePart)
+	Display.Adornee = Anchor
+	Display.SizeOffset = Vector2.new(0, 0.5)
+	Display.StudsOffsetWorldSpace = Vector3.new(0, Anchor.Size.Y * 0.5 + DisplayGap, 0)
+	Display.Parent = Anchor
 end
 
 local function BuildPrompt(Data: Spawn): ProximityPrompt
@@ -151,6 +253,24 @@ local function BuildPrompt(Data: Spawn): ProximityPrompt
 	Prompt.RequiresLineOfSight = false
 
 	return Prompt
+end
+
+--> One detector on the model covers every part of the rig. It needs the parts queryable, which
+--> BuildModel switches off for the walkers so nothing on the map has to see them: a seated one is
+--> furniture, and furniture is meant to be clicked.
+local function BuildClickDetector(Model: Model): ClickDetector
+	for _, Descendant in Model:GetDescendants() do
+		if Descendant:IsA("BasePart") then
+			Descendant.CanQuery = true
+		end
+	end
+
+	local Detector = Instance.new("ClickDetector")
+	Detector.Name = "Inspect"
+	Detector.MaxActivationDistance = ClickDistance
+	Detector.Parent = Model
+
+	return Detector
 end
 
 --> How far the root sits above the soles, swept in world space. Model:GetBoundingBox orients its
@@ -226,10 +346,39 @@ local function PlaceRoot(Model: Model, Root: BasePart, Target: CFrame)
 	Model:PivotTo(Target * Root.CFrame:Inverse() * Model:GetPivot())
 end
 
+--> Drops the track somewhere random inside its own loop so a row of employees is not stepping and
+--> typing on the same frame as each other. Length is 0 until the asset is in, and setting
+--> TimePosition against a zero length does nothing, so the wait is worth the one frame it costs.
+local function OffsetPhase(Track: AnimationTrack)
+	if Track.Length > 0 then
+		Track.TimePosition = Variation:NextNumber() * Track.Length
+		return
+	end
+
+	task.spawn(function()
+		local Deadline = os.clock() + PhaseWaitTimeout
+
+		while Track.Length <= 0 and Track.IsPlaying and os.clock() < Deadline do
+			task.wait()
+		end
+
+		if Track.Length > 0 and Track.IsPlaying then
+			Track.TimePosition = Variation:NextNumber() * Track.Length
+		end
+	end)
+end
+
 --> One animation each and no switching between them: a walking employee is always walking, right
 --> up to the frame it is taken off the map, and a seated one is always typing. Speed goes through
---> Play rather than AdjustSpeed, because Play resets it to 1 either way.
-local function PlayLoop(Model: Model, Animation: Animation, Speed: number, Fade: number): AnimationTrack?
+--> Play rather than AdjustSpeed, because Play resets it to 1 either way, and carries a per-track
+--> nudge either side of Speed so no two of them run at exactly the same rate.
+local function PlayLoop(
+	Model: Model,
+	Animation: Animation,
+	Speed: number,
+	Fade: number,
+	Spread: number
+): AnimationTrack?
 	--> The rigs hang their Animator off an AnimationController rather than a Humanoid, which is
 	--> what a rig with nothing to simulate wants. Both are checked so either kind animates.
 	local Controller = Model:FindFirstChildOfClass("AnimationController") or Model:FindFirstChildOfClass("Humanoid")
@@ -242,7 +391,8 @@ local function PlayLoop(Model: Model, Animation: Animation, Speed: number, Fade:
 	local Track = Animator:LoadAnimation(Animation)
 	Track.Looped = true
 	Track.Priority = Enum.AnimationPriority.Movement
-	Track:Play(Fade, 1, Speed)
+	Track:Play(Fade, 1, Speed * (1 + Variation:NextNumber(-Spread, Spread)))
+	OffsetPhase(Track)
 
 	return Track
 end
@@ -280,10 +430,10 @@ function EmployeeController:Add(Data: Spawn): Rendered?
 	PlaceRoot(Model, Root, CFrame.new(Data.Position + Vector3.new(0, Lift, 0)))
 	Model.Parent = GetContainer()
 
-	BuildDisplay(Data.Name, Data.Type, Data.Cost).Parent = Model:FindFirstChild(HeadName) or Root
+	AttachDisplay(BuildDisplay(Data.Name, Data.Type, Data.Cost), GetHead(Model, Root))
 	Prompt.Parent = Root
 
-	PlayLoop(Model, AnimationFolder.Walking, WalkPlaybackSpeed, AnimationFade)
+	PlayLoop(Model, AnimationFolder.Walking, WalkPlaybackSpeed, AnimationFade, WalkSpeedSpread)
 
 	local Employee: Rendered = {
 		UID = Data.UID,
@@ -352,9 +502,30 @@ function EmployeeController:Buy(UID: number)
 		return
 	end
 
+	--> Turned down here as well as on the server, with the reason said, so a press the server would
+	--> refuse is answered on the spot instead of with a bare error after a round trip.
+	if PlayerData.Cash() < Employee.Cost then
+		SoundController:Play("Error")
+		TutorialController:Notify(TutorialConfigs.Notices.NoCash)
+		return
+	end
+
+	if not DeskData.GetFreeSeat(PlayerData) then
+		SoundController:Play("Error")
+		TutorialController:Notify(TutorialConfigs.Notices.NoSeat)
+		return
+	end
+
 	Employee.Prompt.Enabled = false
 
-	return NetworkingClient.Employees.Buy.Invoke(UID):andThen(function()
+	return NetworkingClient.Employees.Buy.Invoke(UID):andThen(function(Bought: boolean)
+		SoundController:Play(if Bought then "Purchase" else "Error")
+
+		if Bought then
+			ScreenShakeController:Shake(0.6)
+			TutorialController:Notify(`Hired {Employee.Name} ({Employee.Type})`)
+		end
+
 		if self.Employees[UID] then
 			RefreshPrompt(Employee)
 		end
@@ -375,6 +546,110 @@ function EmployeeController:RemoveSeated(Floor: number, Slot: number)
 
 	self.Seated[Key] = nil
 	Existing.Model:Destroy()
+
+	EmployeeMenuController:Register(Floor, Slot, nil)
+end
+
+--> One employee sat in a chair, with the card over their head, the typing loop and the typing
+--> sound all running. Nothing about whose chair it is: the player's own seats and the desks of a
+--> base being visited both build theirs through here, and the caller says where the rig lives.
+--> The sound is hung off the root and left running for as long as the rig exists: whoever
+--> destroys the model takes the sound with it.
+function EmployeeController:BuildSeated(
+	Type: string,
+	Name: string,
+	Label: string,
+	Seat: CFrame,
+	Parent: Instance
+): (Model, BasePart, BasePart)
+	local Model, Root = BuildModel(Type, Label)
+
+	PlaceRoot(Model, Root, Seat)
+	Model.Parent = Parent
+
+	local Head = GetHead(Model, Root)
+
+	AttachDisplay(BuildDisplay(Name, Type), Head)
+
+	--> No fade in: a seated one is already typing the moment it is there, it never arrived.
+	local Track = PlayLoop(Model, AnimationFolder.Typing, 1, 0, TypeSpeedSpread)
+	local Sound = SoundController:Attach("Typing", Root)
+
+	return Model, Root, Head, Track, Sound
+end
+
+--> Whether every part a desk earns off is standing on it.
+local function IsStocked(Desk: any): boolean
+	if type(Desk) ~= "table" then
+		return false
+	end
+
+	for Component in Offsets.Desk do
+		if not DeskData.IsPart(Desk[Component]) then
+			return false
+		end
+	end
+
+	return true
+end
+
+--> A seated employee with parts missing from the desk stops typing and goes red until the desk
+--> is filled again: typing at an empty desk earns nothing, and it should look like it.
+function EmployeeController:RefreshIdle(Floor: number, Slot: number)
+	local Seat = self.Seated[SeatKey(Floor, Slot)]
+
+	if not Seat then
+		return
+	end
+
+	local Idle = not IsStocked(PlayerData.Floors[Floor].Desks[Slot]())
+
+	if Idle == Seat.Idle then
+		return
+	end
+
+	Seat.Idle = Idle
+
+	local Existing = Seat.Model:FindFirstChild(IdleName)
+
+	if Idle then
+		--> frozen mid stroke rather than stopped: a stopped track drops the rig back to its bind
+		--> pose, which is a mannequin, not somebody waiting on parts
+		if Seat.Track then
+			Seat.Track.TimePosition = Seat.Track.Length * FreezePoint
+			Seat.Track:AdjustSpeed(0)
+		end
+
+		if Seat.Sound then
+			Seat.Sound:Pause()
+		end
+
+		if not Existing then
+			local Mark = Instance.new("Highlight")
+			Mark.Name = IdleName
+			Mark.FillColor = IdleColor
+			Mark.OutlineColor = IdleColor
+			Mark.FillTransparency = IdleFill
+			Mark.OutlineTransparency = IdleOutline
+			--> hidden by walls like the rig is, rather than drawn over everything from anywhere
+			Mark.DepthMode = Enum.HighlightDepthMode.Occluded
+			Mark.Parent = Seat.Model
+		end
+
+		return
+	end
+
+	if Seat.Track then
+		Seat.Track:AdjustSpeed(Seat.Speed)
+	end
+
+	if Seat.Sound then
+		Seat.Sound:Resume()
+	end
+
+	if Existing then
+		Existing:Destroy()
+	end
 end
 
 --> Rebuilt only when the person in the chair changes. Swapping a desk's monitor fires the same
@@ -387,6 +662,7 @@ function EmployeeController:RefreshSeat(Floor: number, Slot: number)
 	local Existing = self.Seated[Key]
 
 	if (Existing and Existing.Stamp or nil) == Stamp then
+		self:RefreshIdle(Floor, Slot)
 		return
 	end
 
@@ -403,17 +679,99 @@ function EmployeeController:RefreshSeat(Floor: number, Slot: number)
 		return
 	end
 
-	local Model, Root = BuildModel(Seated.Type, `{Seated.Type}_{Key}`)
+	local Seat = DeskCFrame * Offsets.EmployeeDeskOffset
+	local Model, _Root, Head, Track, Sound =
+		self:BuildSeated(Seated.Type, Seated.Name, `{Seated.Type}_{Key}`, Seat, GetContainer())
 
-	PlaceRoot(Model, Root, DeskCFrame * Offsets.EmployeeDeskOffset)
-	Model.Parent = GetContainer()
+	--> A swap changes two seats in the same beat, and one cue for the pair is enough.
+	if self.Ready and os.clock() - self.SeatCueClock > SeatCueGap then
+		self.SeatCueClock = os.clock()
+		SoundController:PlayAt("EmployeeSeated", Seat.Position)
+	end
 
-	BuildDisplay(Seated.Name, Seated.Type).Parent = Model:FindFirstChild(HeadName) or Root
+	--> The detector lives in the model and goes when the seat is emptied.
+	local Detector = BuildClickDetector(Model)
 
-	--> No fade in: a seated one is already typing the moment it is there, it never arrived.
-	PlayLoop(Model, AnimationFolder.Typing, 1, 0)
+	Detector.MouseHoverEnter:Connect(function()
+		EmployeeMenuController:Hover(Floor, Slot, Model)
+	end)
 
-	self.Seated[Key] = { Model = Model, Stamp = Stamp }
+	Detector.MouseHoverLeave:Connect(function()
+		EmployeeMenuController:Unhover(Model)
+	end)
+
+	Detector.MouseClick:Connect(function()
+		EmployeeMenuController:Show(Floor, Slot)
+	end)
+
+	self.Seated[Key] = {
+		Model = Model,
+		Stamp = Stamp,
+		Floor = Floor,
+		Slot = Slot,
+		Position = Seat.Position,
+		Head = Head,
+		Track = Track,
+		Sound = Sound,
+		Idle = false,
+		Speed = if Track then Track.Speed else 1,
+	}
+
+	EmployeeMenuController:Register(Floor, Slot, Model)
+
+	self:RefreshIdle(Floor, Slot)
+end
+
+--> Every seat that is actually paying, in a fixed order so the cursor below walks the office the
+--> same way each tick instead of jumping about with the hash order. A desk with an employee but no
+--> parts on it earns nothing, and something that earns nothing has no reason to be heard.
+function EmployeeController:GetEarners(): { Earner }
+	local Earners: { Earner } = {}
+
+	--> What the tree has raised the plot's whole take by. The server floors the plot total once
+	--> rather than desk by desk, so these will not always add up to the amount that landed in the
+	--> balance: what is shown over a desk is that desk's own share, not a slice of the payment.
+	local Multiplier = PlayerData.Multipliers.Cash()
+
+	for _, Seated in self.Seated do
+		local Desk = PlayerData.Floors[Seated.Floor].Desks[Seated.Slot]()
+		local Rate = if Desk then math.floor(Revenue.DeskRate(Desk) * Multiplier) else 0
+
+		if Rate > 0 then
+			table.insert(Earners, { Seat = Seated, Rate = Rate })
+		end
+	end
+
+	table.sort(Earners, function(Left: Earner, Right: Earner): boolean
+		if Left.Seat.Floor ~= Right.Seat.Floor then
+			return Left.Seat.Floor < Right.Seat.Floor
+		end
+
+		return Left.Seat.Slot < Right.Seat.Slot
+	end)
+
+	return Earners
+end
+
+--> A card over every desk that paid, and a sound out of one of them. The cards are what the player
+--> is looking at, so they all come up; the sound is the one thing that cannot overlap twenty ways
+--> and still be a sound, so it takes its turn round the office instead.
+--> Both are positional and PayPopupController drops anything out of range on its own, so a plot
+--> earning on four floors only ever shows the floor being stood on.
+function EmployeeController:Payday()
+	local Earners = self:GetEarners()
+
+	if #Earners == 0 then
+		return
+	end
+
+	for _, Earner in Earners do
+		PayPopupController:Show(Earner.Seat.Head, Earner.Rate)
+	end
+
+	self.PayCursor = (self.PayCursor % #Earners) + 1
+
+	SoundController:PlayAt("EmployeePay", Earners[self.PayCursor].Seat.Position)
 end
 
 function EmployeeController:Step(Delta: number, Parts: { BasePart }, CFrames: { CFrame })
@@ -451,9 +809,19 @@ function EmployeeController:Start()
 	local Parts: { BasePart } = {}
 	local CFrames: { CFrame } = {}
 
+	--> Sounded here rather than inside Add, which is also what the join time sweep below goes
+	--> through: everyone already walking the map would announce themselves at once on the way in.
+	--> Positional and quiet, since one of these arrives every few seconds for the life of the
+	--> server and is only worth hearing near the door they come in through.
 	NetworkingClient.Employees.Added.On(function(Batch)
 		for _, Data in Batch do
+			local Known = self.Employees[Data.UID] ~= nil
+
 			self:Add(Data)
+
+			if not Known then
+				SoundController:PlayAt("EmployeeSpawn", Data.Position)
+			end
 		end
 	end)
 
@@ -509,8 +877,31 @@ function EmployeeController:Start()
 		WatchFloor(Floor)
 	end
 
+	--> Everything from here on is somebody actually sitting down rather than a seat being restored.
+	self.Ready = true
+
 	PlayerData.Floors.OnKeyAdded(function(Floor: number)
 		WatchFloor(Floor)
+	end)
+
+	--> Off the balance rather than off a payday message: the server pays on its own clock and the
+	--> only thing that reaches the client is the new number, which is all this needs. Only a rise
+	--> counts, so buying an employee or a node does not ring the tills.
+	self.Balance = if type(PlayerData.Cash()) == "number" then PlayerData.Cash() else nil
+
+	PlayerData.Cash.Changed(function()
+		local New = PlayerData.Cash()
+
+		if type(New) ~= "number" then
+			return
+		end
+
+		local Previous = self.Balance
+		self.Balance = New
+
+		if Previous and New > Previous then
+			self:Payday()
+		end
 	end)
 
 	task.spawn(function()

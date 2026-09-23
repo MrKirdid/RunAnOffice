@@ -149,6 +149,7 @@ local Queue: any = {
 }
 
 export type Player = Player
+export type Visiting_Desk = { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }
 export type Employees_UID = number
 export type Employees_Position = Vector3
 export type Employees_Spawn = { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? }
@@ -162,11 +163,23 @@ return {
 	},
 	Stealing = {
 	},
+	Visiting = {
+	},
 	Purchases = {
 	},
 	NPCs = {
 	},
 	Employees = {
+	},
+	Upgrades = {
+	},
+	Shop = {
+	},
+	Floors = {
+	},
+	Notices = {
+	},
+	Gears = {
 	},
 
 }

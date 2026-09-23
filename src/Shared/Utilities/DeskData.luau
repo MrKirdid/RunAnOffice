@@ -6,6 +6,18 @@ local DeskPlacements = require(Shared.Utilities.DeskPlacements)
 
 local DeskData = {}
 
+--> What a slot holds once the part on it has been stolen. Not nil: nil is a slot never rolled, and
+--> the gift standing over one of those would hand the victim a free reroll of whatever was taken.
+--> An empty string is a slot that was rolled and then emptied -- worth nothing, wearing no gift,
+--> and filled again only by a part being placed on it or by the thief being caught.
+DeskData.Empty = ""
+
+--> Whether a slot's record is a part that can be built, paid for or stolen, rather than nil or the
+--> empty left behind by a theft.
+function DeskData.IsPart(Variant: any): boolean
+	return type(Variant) == "string" and Variant ~= DeskData.Empty
+end
+
 --> A save round trip turns numeric keys into strings, so slots need matching both ways.
 local function MatchKey(Raw: { [any]: any }?, Wanted: number): any?
 	if not Raw then
@@ -139,6 +151,20 @@ function DeskData.Unlock(Data: any, Floor: number): any
 	end
 
 	return Data.Floors[FloorKey]
+end
+
+--> The reverse of Unlock: the floor key leaves the save, which replicates as a removal and takes
+--> every desk standing on it with it. Returns whether there was one to take.
+function DeskData.Lock(Data: any, Floor: number): boolean
+	local FloorKey = MatchKey(Data.Floors(), Floor)
+
+	if FloorKey == nil then
+		return false
+	end
+
+	Data.Floors[FloorKey](nil)
+
+	return true
 end
 
 function DeskData.GetNextAvailable(Data: any, Plot: Model): (number?, number?)

@@ -9,15 +9,12 @@ local Assets = ReplicatedStorage:WaitForChild("Assets")
 local PartConfigs = require(Shared.Configs.Parts)
 local Tiers = require(Shared.Utilities.Tiers)
 local Renders = require(Shared.Configs.Renders)
-local Rolling = require(Shared.Utilities.Rolling)
 
 local ContainerName = "ItemDisplays"
 
 local SpinSpeed = 90
 local PopIn = TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local PopOut = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-
-local BaseOdds = Rolling.Chances(PartConfigs.Variants, 1)
 
 local ItemDisplayController = {}
 
@@ -97,14 +94,6 @@ local function FormatValue(Value: number): string
 	return (string.gsub(Text, "%.0$", ""))
 end
 
-local function GetRarity(Variant: string): (string, Color3, number)
-	local Chance = BaseOdds[Variant]
-	local Odds = if Chance and Chance > 0 then 1 / Chance else math.huge
-	local Name, Color = Tiers.FromOdds(Odds)
-
-	return Name, Color, Odds
-end
-
 local function FormatOdds(Odds: number): string
 	if Odds ~= Odds or Odds == math.huge then
 		return "1 / ???"
@@ -138,7 +127,7 @@ function ItemDisplayController:Build(Component: string, Variant: string, Glow: b
 		warn(`[ItemDisplay] No render for {Variant}.{Component}`)
 	end
 
-	local RarityName, RarityColor, Odds = GetRarity(Variant)
+	local RarityName, RarityColor, Odds = Tiers.FromVariant(Variant)
 
 	Display.ClipsDescendants = false
 

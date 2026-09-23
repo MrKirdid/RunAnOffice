@@ -169,8 +169,20 @@ Queue.Reliable[4] = table.create(256)
 Queue.Reliable[5] = table.create(256)
 Queue.Reliable[6] = table.create(256)
 Queue.Reliable[7] = table.create(256)
+Queue.Reliable[8] = table.create(256)
 Queue.Reliable[12] = table.create(256)
+Queue.Reliable[13] = table.create(256)
+Queue.Reliable[18] = table.create(256)
+Queue.Reliable[19] = table.create(256)
+Queue.Reliable[20] = table.create(256)
+Queue.Reliable[21] = table.create(256)
+Queue.Reliable[22] = table.create(256)
+Queue.Reliable[23] = table.create(256)
+Queue.Reliable[25] = table.create(256)
+Queue.Reliable[26] = table.create(256)
+Queue.Reliable[27] = table.create(256)
 export type Player = Player
+export type Visiting_Desk = { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }
 export type Employees_UID = number
 export type Employees_Position = Vector3
 export type Employees_Spawn = { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? }
@@ -281,10 +293,36 @@ function SerdesFunctions.Items_ReadFUNCTION_DATA_Replace(): ({ Floor: number, Sl
 	return Value
 end
 
-function SerdesFunctions.Items_WriteFUNCTION_RETURN_Replace(Value: { Component: string, Variant: string }, InvocationIdentifier: number): ()
+function SerdesFunctions.Items_WriteFUNCTION_RETURN_Replace(Value: boolean, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value and 1 or 0)
+end
+
+function SerdesFunctions.Items_ReadFUNCTION_DATA_RollSlot(): ({ Floor: number, Slot: number, Component: string })
+	-- Read BLOCK: 3 bytes
+	local BLOCK_START = Read(3)
+	local Value = {} :: any
+	Value.Floor = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Value.Floor < 1 then error(`Expected "Value.Floor" to be larger than 1, got {Value.Floor} instead.`) end
+	if Value.Floor > 16 then error(`Expected "Value.Floor" to be smaller than 16, got {Value.Floor} instead.`) end
+	Value.Slot = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	if Value.Slot < 1 then error(`Expected "Value.Slot" to be larger than 1, got {Value.Slot} instead.`) end
+	if Value.Slot > 16 then error(`Expected "Value.Slot" to be smaller than 16, got {Value.Slot} instead.`) end
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 2)
+	Value.Component = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value.Component < 1 then error(`Expected length of "Value.Component" to be larger than 1, got {#Value.Component} instead.`) end
+	if #Value.Component > 20 then error(`Expected length of "Value.Component" to be smaller than 20, got {#Value.Component} instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Items_WriteFUNCTION_RETURN_RollSlot(Value: { Component: string, Variant: string }, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 5 bytes
 	local BLOCK_START = Allocate(5)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 5)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
 	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
 	local Length = #Value.Component
@@ -297,21 +335,226 @@ function SerdesFunctions.Items_WriteFUNCTION_RETURN_Replace(Value: { Component: 
 	buffer.writestring(SendBuffer, SendOffset, Value.Variant, Length)
 end
 
-function SerdesFunctions.Items_ReadFUNCTION_DATA_Drop(): (nil)
+function SerdesFunctions.Items_ReadFUNCTION_DATA_Stash(): (nil)
 	return nil
 end
 
-function SerdesFunctions.Items_WriteFUNCTION_RETURN_Drop(Value: boolean, InvocationIdentifier: number): ()
+function SerdesFunctions.Items_WriteFUNCTION_RETURN_Stash(Value: boolean, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 4 bytes
 	local BLOCK_START = Allocate(4)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 5)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 6)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
 	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
 	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value and 1 or 0)
 end
 
-function SerdesFunctions.Purchases_ReadEVENT_BuyDesk(): (nil)
+function SerdesFunctions.Items_ReadFUNCTION_DATA_Equip(): (number)
+	-- Read BLOCK: 1 bytes
+	local BLOCK_START = Read(1)
+	local Value = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Value < 1 then error(`Expected "Value" to be larger than 1, got {Value} instead.`) end
+	if Value > 255 then error(`Expected "Value" to be smaller than 255, got {Value} instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Items_WriteFUNCTION_RETURN_Equip(Value: boolean, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 7)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value and 1 or 0)
+end
+
+function SerdesFunctions.Stealing_ReadFUNCTION_DATA_Steal(): ({ Owner: Player, Floor: number, Slot: number })
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Value = {} :: any
+	RecieveInstanceCursor += 1
+	Value.Owner = RecieveInstances[RecieveInstanceCursor]
+	if typeof(Value.Owner) ~= "Instance" then error(`Expected an Instance, got {typeof(Value.Owner)} instead.`) end
+	if not Value.Owner:IsA("Player") then error(`Expected an Instance of type "Player", got "{Value.Owner.ClassName}" instead.`) end
+	Value.Floor = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Value.Floor < 1 then error(`Expected "Value.Floor" to be larger than 1, got {Value.Floor} instead.`) end
+	if Value.Floor > 16 then error(`Expected "Value.Floor" to be smaller than 16, got {Value.Floor} instead.`) end
+	Value.Slot = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	if Value.Slot < 1 then error(`Expected "Value.Slot" to be larger than 1, got {Value.Slot} instead.`) end
+	if Value.Slot > 16 then error(`Expected "Value.Slot" to be smaller than 16, got {Value.Slot} instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Stealing_WriteFUNCTION_RETURN_Steal(Value: { Name: string, Type: string }, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 5 bytes
+	local BLOCK_START = Allocate(5)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 8)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	local Length = #Value.Name
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.Name, Length)
+	local Length = #Value.Type
+	buffer.writeu8(SendBuffer, BLOCK_START + 4, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.Type, Length)
+end
+
+function SerdesFunctions.Visiting_WriteEVENT_Entered(Value: { Owner: Player, Desks: { { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? } } }): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 9)
+	table.insert(SendInstances, Value.Owner or Null)
+	-- START ARRAY
+	buffer.writeu16(SendBuffer, BLOCK_START + 1, #Value.Desks)
+		-- Allocate BLOCK: 7 bytes
+	local ARRAY_START_1 = Allocate(7 * #Value.Desks)
+	for Index = 1, #Value.Desks do
+		local Item_1 = Value.Desks[Index]
+		-- Allocate 1
+		local OPERATION_OFFSET_0 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		buffer.writeu8(SendBuffer, OPERATION_OFFSET_0, Item_1.Floor)
+		-- Allocate 1
+		local OPERATION_OFFSET_1 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		buffer.writeu8(SendBuffer, OPERATION_OFFSET_1, Item_1.Slot)
+		-- Allocate 1
+		local OPERATION_OFFSET_2 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		buffer.writeu8(SendBuffer, OPERATION_OFFSET_2, Item_1.Computer ~= nil and 1 or 0)
+		if Item_1.Computer ~= nil then
+			-- Allocate BLOCK: 1 bytes
+			local BLOCK_START = Allocate(1)
+			local Length = #Item_1.Computer
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Length)
+			Allocate(Length)
+			buffer.writestring(SendBuffer, SendOffset, Item_1.Computer, Length)
+		end
+		-- Allocate 1
+		local OPERATION_OFFSET_3 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		buffer.writeu8(SendBuffer, OPERATION_OFFSET_3, Item_1.Keyboard ~= nil and 1 or 0)
+		if Item_1.Keyboard ~= nil then
+			-- Allocate BLOCK: 1 bytes
+			local BLOCK_START = Allocate(1)
+			local Length = #Item_1.Keyboard
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Length)
+			Allocate(Length)
+			buffer.writestring(SendBuffer, SendOffset, Item_1.Keyboard, Length)
+		end
+		-- Allocate 1
+		local OPERATION_OFFSET_4 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		buffer.writeu8(SendBuffer, OPERATION_OFFSET_4, Item_1.Monitor ~= nil and 1 or 0)
+		if Item_1.Monitor ~= nil then
+			-- Allocate BLOCK: 1 bytes
+			local BLOCK_START = Allocate(1)
+			local Length = #Item_1.Monitor
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Length)
+			Allocate(Length)
+			buffer.writestring(SendBuffer, SendOffset, Item_1.Monitor, Length)
+		end
+		-- Allocate 1
+		local OPERATION_OFFSET_5 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		buffer.writeu8(SendBuffer, OPERATION_OFFSET_5, Item_1.Employee ~= nil and 1 or 0)
+		if Item_1.Employee ~= nil then
+			-- Allocate BLOCK: 1 bytes
+			local BLOCK_START = Allocate(1)
+			local Length = #Item_1.Employee
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Length)
+			Allocate(Length)
+			buffer.writestring(SendBuffer, SendOffset, Item_1.Employee, Length)
+		end
+		-- Allocate 1
+		local OPERATION_OFFSET_6 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		buffer.writeu8(SendBuffer, OPERATION_OFFSET_6, Item_1.EmployeeName ~= nil and 1 or 0)
+		if Item_1.EmployeeName ~= nil then
+			-- Allocate BLOCK: 1 bytes
+			local BLOCK_START = Allocate(1)
+			local Length = #Item_1.EmployeeName
+			buffer.writeu8(SendBuffer, BLOCK_START + 0, Length)
+			Allocate(Length)
+			buffer.writestring(SendBuffer, SendOffset, Item_1.EmployeeName, Length)
+		end
+	end
+	-- END ARRAY
+end
+
+function SerdesFunctions.Visiting_WriteEVENT_DeskChanged(Value: { Owner: Player, Desk: { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }, Removed: boolean }): ()
+	-- Allocate BLOCK: 9 bytes
+	local BLOCK_START = Allocate(9)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 10)
+	table.insert(SendInstances, Value.Owner or Null)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.Desk.Floor)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.Desk.Slot)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.Desk.Computer ~= nil and 1 or 0)
+	if Value.Desk.Computer ~= nil then
+		-- Allocate BLOCK: 1 bytes
+		local BLOCK_START = Allocate(1)
+		local Length = #Value.Desk.Computer
+		buffer.writeu8(SendBuffer, BLOCK_START + 0, Length)
+		Allocate(Length)
+		buffer.writestring(SendBuffer, SendOffset, Value.Desk.Computer, Length)
+	end
+	buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.Desk.Keyboard ~= nil and 1 or 0)
+	if Value.Desk.Keyboard ~= nil then
+		-- Allocate BLOCK: 1 bytes
+		local BLOCK_START = Allocate(1)
+		local Length = #Value.Desk.Keyboard
+		buffer.writeu8(SendBuffer, BLOCK_START + 0, Length)
+		Allocate(Length)
+		buffer.writestring(SendBuffer, SendOffset, Value.Desk.Keyboard, Length)
+	end
+	buffer.writeu8(SendBuffer, BLOCK_START + 5, Value.Desk.Monitor ~= nil and 1 or 0)
+	if Value.Desk.Monitor ~= nil then
+		-- Allocate BLOCK: 1 bytes
+		local BLOCK_START = Allocate(1)
+		local Length = #Value.Desk.Monitor
+		buffer.writeu8(SendBuffer, BLOCK_START + 0, Length)
+		Allocate(Length)
+		buffer.writestring(SendBuffer, SendOffset, Value.Desk.Monitor, Length)
+	end
+	buffer.writeu8(SendBuffer, BLOCK_START + 6, Value.Desk.Employee ~= nil and 1 or 0)
+	if Value.Desk.Employee ~= nil then
+		-- Allocate BLOCK: 1 bytes
+		local BLOCK_START = Allocate(1)
+		local Length = #Value.Desk.Employee
+		buffer.writeu8(SendBuffer, BLOCK_START + 0, Length)
+		Allocate(Length)
+		buffer.writestring(SendBuffer, SendOffset, Value.Desk.Employee, Length)
+	end
+	buffer.writeu8(SendBuffer, BLOCK_START + 7, Value.Desk.EmployeeName ~= nil and 1 or 0)
+	if Value.Desk.EmployeeName ~= nil then
+		-- Allocate BLOCK: 1 bytes
+		local BLOCK_START = Allocate(1)
+		local Length = #Value.Desk.EmployeeName
+		buffer.writeu8(SendBuffer, BLOCK_START + 0, Length)
+		Allocate(Length)
+		buffer.writestring(SendBuffer, SendOffset, Value.Desk.EmployeeName, Length)
+	end
+	buffer.writeu8(SendBuffer, BLOCK_START + 8, Value.Removed and 1 or 0)
+end
+
+function SerdesFunctions.Visiting_WriteEVENT_Left(Value: Player): ()
+	-- Allocate BLOCK: 1 bytes
+	local BLOCK_START = Allocate(1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 11)
+	table.insert(SendInstances, Value or Null)
+end
+
+function SerdesFunctions.Purchases_ReadFUNCTION_DATA_BuyDesk(): (nil)
 	return nil
+end
+
+function SerdesFunctions.Purchases_WriteFUNCTION_RETURN_BuyDesk(Value: boolean, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 12)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value and 1 or 0)
 end
 
 function SerdesFunctions.Employees_ReadFUNCTION_DATA_GetAll(): (nil)
@@ -321,7 +564,7 @@ end
 function SerdesFunctions.Employees_WriteFUNCTION_RETURN_GetAll(Value: { { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? } }, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 5 bytes
 	local BLOCK_START = Allocate(5)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 7)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 13)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
 	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
 	-- START ARRAY
@@ -373,7 +616,7 @@ end
 function SerdesFunctions.Employees_WriteEVENT_Added(Value: { { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? } }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 8)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 14)
 	-- START ARRAY
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, #Value)
 		-- Allocate BLOCK: 22 bytes
@@ -423,7 +666,7 @@ end
 function SerdesFunctions.Employees_WriteEVENT_Moved(Value: { { UID: number, Position: Vector3 } }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 9)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 15)
 	-- START ARRAY
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, #Value)
 		-- Allocate BLOCK: 16 bytes
@@ -454,7 +697,7 @@ end
 function SerdesFunctions.Employees_WriteEVENT_Removed(Value: { number }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 10)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 16)
 	-- START ARRAY
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, #Value)
 		-- Allocate BLOCK: 4 bytes
@@ -472,7 +715,7 @@ end
 function SerdesFunctions.Employees_WriteEVENT_OwnerChanged(Value: { { UID: number, Owner: Player? } }): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 11)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 17)
 	-- START ARRAY
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, #Value)
 		-- Allocate BLOCK: 4 bytes
@@ -498,10 +741,185 @@ end
 function SerdesFunctions.Employees_WriteFUNCTION_RETURN_Buy(Value: boolean, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 4 bytes
 	local BLOCK_START = Allocate(4)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 12)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 18)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
 	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
 	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value and 1 or 0)
+end
+
+function SerdesFunctions.Employees_ReadFUNCTION_DATA_Sell(): ({ Floor: number, Slot: number })
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Value = {} :: any
+	Value.Floor = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	Value.Slot = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	return Value
+end
+
+function SerdesFunctions.Employees_WriteFUNCTION_RETURN_Sell(Value: boolean, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 19)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value and 1 or 0)
+end
+
+function SerdesFunctions.Employees_ReadFUNCTION_DATA_Move(): ({ FromFloor: number, FromSlot: number, ToFloor: number, ToSlot: number })
+	-- Read BLOCK: 4 bytes
+	local BLOCK_START = Read(4)
+	local Value = {} :: any
+	Value.FromFloor = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	Value.FromSlot = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	Value.ToFloor = buffer.readu8(RecieveBuffer, BLOCK_START + 2)
+	Value.ToSlot = buffer.readu8(RecieveBuffer, BLOCK_START + 3)
+	return Value
+end
+
+function SerdesFunctions.Employees_WriteFUNCTION_RETURN_Move(Value: boolean, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 20)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value and 1 or 0)
+end
+
+function SerdesFunctions.Upgrades_ReadFUNCTION_DATA_Buy(): (string)
+	-- Read BLOCK: 1 bytes
+	local BLOCK_START = Read(1)
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	local Value = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value < 1 then error(`Expected length of "Value" to be larger than 1, got {#Value} instead.`) end
+	if #Value > 40 then error(`Expected length of "Value" to be smaller than 40, got {#Value} instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Upgrades_WriteFUNCTION_RETURN_Buy(Value: boolean, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 21)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value and 1 or 0)
+end
+
+function SerdesFunctions.Shop_ReadFUNCTION_DATA_DevBuy(): (string)
+	-- Read BLOCK: 1 bytes
+	local BLOCK_START = Read(1)
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	local Value = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value < 1 then error(`Expected length of "Value" to be larger than 1, got {#Value} instead.`) end
+	if #Value > 40 then error(`Expected length of "Value" to be smaller than 40, got {#Value} instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Shop_WriteFUNCTION_RETURN_DevBuy(Value: boolean, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 22)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value and 1 or 0)
+end
+
+function SerdesFunctions.Floors_ReadFUNCTION_DATA_Travel(): (number)
+	-- Read BLOCK: 1 bytes
+	local BLOCK_START = Read(1)
+	local Value = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Value < 1 then error(`Expected "Value" to be larger than 1, got {Value} instead.`) end
+	if Value > 16 then error(`Expected "Value" to be smaller than 16, got {Value} instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Floors_WriteFUNCTION_RETURN_Travel(Value: boolean, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 23)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value and 1 or 0)
+end
+
+function SerdesFunctions.Notices_WriteEVENT_Stolen(Value: { Thief: Player, Name: string, Type: string }): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 24)
+	table.insert(SendInstances, Value.Thief or Null)
+	local Length = #Value.Name
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.Name, Length)
+	local Length = #Value.Type
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.Type, Length)
+end
+
+function SerdesFunctions.Gears_ReadFUNCTION_DATA_Buy(): (string)
+	-- Read BLOCK: 1 bytes
+	local BLOCK_START = Read(1)
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	local Value = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value < 1 then error(`Expected length of "Value" to be larger than 1, got {#Value} instead.`) end
+	if #Value > 40 then error(`Expected length of "Value" to be smaller than 40, got {#Value} instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Gears_WriteFUNCTION_RETURN_Buy(Value: boolean, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 25)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value and 1 or 0)
+end
+
+function SerdesFunctions.Gears_ReadFUNCTION_DATA_Equip(): ({ Key: string, On: boolean })
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Value = {} :: any
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	Value.Key = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value.Key < 1 then error(`Expected length of "Value.Key" to be larger than 1, got {#Value.Key} instead.`) end
+	if #Value.Key > 40 then error(`Expected length of "Value.Key" to be smaller than 40, got {#Value.Key} instead.`) end
+	Value.On = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	return Value
+end
+
+function SerdesFunctions.Gears_WriteFUNCTION_RETURN_Equip(Value: boolean, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 26)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value and 1 or 0)
+end
+
+function SerdesFunctions.Gears_ReadEVENT_Use(): ({ Key: string, Aim: Vector3? })
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Value = {} :: any
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	Value.Key = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value.Key < 1 then error(`Expected length of "Value.Key" to be larger than 1, got {#Value.Key} instead.`) end
+	if #Value.Key > 40 then error(`Expected length of "Value.Key" to be smaller than 40, got {#Value.Key} instead.`) end
+	if buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1 then
+		-- Read BLOCK: 12 bytes
+		local BLOCK_START = Read(12)
+		local X = buffer.readf32(RecieveBuffer, BLOCK_START + 0)
+		local Y = buffer.readf32(RecieveBuffer, BLOCK_START + 4)
+		local Z = buffer.readf32(RecieveBuffer, BLOCK_START + 8)
+		Value.Aim = Vector3.new(X, Y, Z)
+	end
+	return Value
+end
+
+function SerdesFunctions.Gears_WriteEVENT_Hit(Value: number): ()
+	-- Allocate BLOCK: 5 bytes
+	local BLOCK_START = Allocate(5)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 28)
+	buffer.writef32(SendBuffer, BLOCK_START + 1, Value)
 end
 
 if not RunService:IsRunning() then
@@ -528,11 +946,40 @@ if not RunService:IsRunning() then
 		Replace = {
 			On = NOOP
 		},
-		Drop = {
+		RollSlot = {
+			On = NOOP
+		},
+		Stash = {
+			On = NOOP
+		},
+		Equip = {
 			On = NOOP
 		},
 	},
 	Stealing = {
+		Steal = {
+			On = NOOP
+		},
+	},
+	Visiting = {
+		Entered = {
+			Fire = NOOP,
+			FireAll = NOOP,
+			FireList = NOOP,
+			FireExcept = NOOP
+		},
+		DeskChanged = {
+			Fire = NOOP,
+			FireAll = NOOP,
+			FireList = NOOP,
+			FireExcept = NOOP
+		},
+		Left = {
+			Fire = NOOP,
+			FireAll = NOOP,
+			FireList = NOOP,
+			FireExcept = NOOP
+		},
 	},
 	Purchases = {
 		BuyDesk = {
@@ -571,6 +1018,52 @@ if not RunService:IsRunning() then
 		},
 		Buy = {
 			On = NOOP
+		},
+		Sell = {
+			On = NOOP
+		},
+		Move = {
+			On = NOOP
+		},
+	},
+	Upgrades = {
+		Buy = {
+			On = NOOP
+		},
+	},
+	Shop = {
+		DevBuy = {
+			On = NOOP
+		},
+	},
+	Floors = {
+		Travel = {
+			On = NOOP
+		},
+	},
+	Notices = {
+		Stolen = {
+			Fire = NOOP,
+			FireAll = NOOP,
+			FireList = NOOP,
+			FireExcept = NOOP
+		},
+	},
+	Gears = {
+		Buy = {
+			On = NOOP
+		},
+		Equip = {
+			On = NOOP
+		},
+		Use = {
+			On = NOOP
+		},
+		Hit = {
+			Fire = NOOP,
+			FireAll = NOOP,
+			FireList = NOOP,
+			FireExcept = NOOP
 		},
 	},
 	})
@@ -691,50 +1184,193 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 			-- Read BLOCK: 1 bytes
 			local BLOCK_START = Read(1)
 			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-			local Value: nil = SerdesFunctions.Items_ReadFUNCTION_DATA_Drop()
+			local Value: { Floor: number, Slot: number, Component: string } = SerdesFunctions.Items_ReadFUNCTION_DATA_RollSlot()
 			if Events.Reliable[5] ~= nil then
 				task.spawn(Events.Reliable[5], Player, Value, InvocationIdentifier)
 			else
 				if #Queue.Reliable[5] > 256 then
-					warn("[Blink]: Event queue of \"Drop\" exceeded 256, did you forget to implement a listener?")
+					warn("[Blink]: Event queue of \"RollSlot\" exceeded 256, did you forget to implement a listener?")
 				end
 				table.insert(Queue.Reliable[5], {Player, Value, InvocationIdentifier} :: {any})
 			end
 		elseif Index == 6 then
-			local Value: nil = SerdesFunctions.Purchases_ReadEVENT_BuyDesk()
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: nil = SerdesFunctions.Items_ReadFUNCTION_DATA_Stash()
 			if Events.Reliable[6] ~= nil then
-				task.spawn(Events.Reliable[6], Player, Value)
+				task.spawn(Events.Reliable[6], Player, Value, InvocationIdentifier)
 			else
 				if #Queue.Reliable[6] > 256 then
-					warn("[Blink]: Event queue of \"BuyDesk\" exceeded 256, did you forget to implement a listener?")
+					warn("[Blink]: Event queue of \"Stash\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[6], {Player, Value} :: {any})
+				table.insert(Queue.Reliable[6], {Player, Value, InvocationIdentifier} :: {any})
 			end
 		elseif Index == 7 then
 			-- Read BLOCK: 1 bytes
 			local BLOCK_START = Read(1)
 			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-			local Value: nil = SerdesFunctions.Employees_ReadFUNCTION_DATA_GetAll()
+			local Value: number = SerdesFunctions.Items_ReadFUNCTION_DATA_Equip()
 			if Events.Reliable[7] ~= nil then
 				task.spawn(Events.Reliable[7], Player, Value, InvocationIdentifier)
 			else
 				if #Queue.Reliable[7] > 256 then
-					warn("[Blink]: Event queue of \"GetAll\" exceeded 256, did you forget to implement a listener?")
+					warn("[Blink]: Event queue of \"Equip\" exceeded 256, did you forget to implement a listener?")
 				end
 				table.insert(Queue.Reliable[7], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 8 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: { Owner: Player, Floor: number, Slot: number } = SerdesFunctions.Stealing_ReadFUNCTION_DATA_Steal()
+			if Events.Reliable[8] ~= nil then
+				task.spawn(Events.Reliable[8], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[8] > 256 then
+					warn("[Blink]: Event queue of \"Steal\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[8], {Player, Value, InvocationIdentifier} :: {any})
 			end
 		elseif Index == 12 then
 			-- Read BLOCK: 1 bytes
 			local BLOCK_START = Read(1)
 			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-			local Value: number = SerdesFunctions.Employees_ReadFUNCTION_DATA_Buy()
+			local Value: nil = SerdesFunctions.Purchases_ReadFUNCTION_DATA_BuyDesk()
 			if Events.Reliable[12] ~= nil then
 				task.spawn(Events.Reliable[12], Player, Value, InvocationIdentifier)
 			else
 				if #Queue.Reliable[12] > 256 then
-					warn("[Blink]: Event queue of \"Buy\" exceeded 256, did you forget to implement a listener?")
+					warn("[Blink]: Event queue of \"BuyDesk\" exceeded 256, did you forget to implement a listener?")
 				end
 				table.insert(Queue.Reliable[12], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 13 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: nil = SerdesFunctions.Employees_ReadFUNCTION_DATA_GetAll()
+			if Events.Reliable[13] ~= nil then
+				task.spawn(Events.Reliable[13], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[13] > 256 then
+					warn("[Blink]: Event queue of \"GetAll\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[13], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 18 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: number = SerdesFunctions.Employees_ReadFUNCTION_DATA_Buy()
+			if Events.Reliable[18] ~= nil then
+				task.spawn(Events.Reliable[18], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[18] > 256 then
+					warn("[Blink]: Event queue of \"Buy\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[18], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 19 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: { Floor: number, Slot: number } = SerdesFunctions.Employees_ReadFUNCTION_DATA_Sell()
+			if Events.Reliable[19] ~= nil then
+				task.spawn(Events.Reliable[19], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[19] > 256 then
+					warn("[Blink]: Event queue of \"Sell\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[19], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 20 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: { FromFloor: number, FromSlot: number, ToFloor: number, ToSlot: number } = SerdesFunctions.Employees_ReadFUNCTION_DATA_Move()
+			if Events.Reliable[20] ~= nil then
+				task.spawn(Events.Reliable[20], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[20] > 256 then
+					warn("[Blink]: Event queue of \"Move\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[20], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 21 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: string = SerdesFunctions.Upgrades_ReadFUNCTION_DATA_Buy()
+			if Events.Reliable[21] ~= nil then
+				task.spawn(Events.Reliable[21], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[21] > 256 then
+					warn("[Blink]: Event queue of \"Buy\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[21], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 22 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: string = SerdesFunctions.Shop_ReadFUNCTION_DATA_DevBuy()
+			if Events.Reliable[22] ~= nil then
+				task.spawn(Events.Reliable[22], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[22] > 256 then
+					warn("[Blink]: Event queue of \"DevBuy\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[22], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 23 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: number = SerdesFunctions.Floors_ReadFUNCTION_DATA_Travel()
+			if Events.Reliable[23] ~= nil then
+				task.spawn(Events.Reliable[23], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[23] > 256 then
+					warn("[Blink]: Event queue of \"Travel\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[23], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 25 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: string = SerdesFunctions.Gears_ReadFUNCTION_DATA_Buy()
+			if Events.Reliable[25] ~= nil then
+				task.spawn(Events.Reliable[25], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[25] > 256 then
+					warn("[Blink]: Event queue of \"Buy\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[25], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 26 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: { Key: string, On: boolean } = SerdesFunctions.Gears_ReadFUNCTION_DATA_Equip()
+			if Events.Reliable[26] ~= nil then
+				task.spawn(Events.Reliable[26], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[26] > 256 then
+					warn("[Blink]: Event queue of \"Equip\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[26], {Player, Value, InvocationIdentifier} :: {any})
+			end
+		elseif Index == 27 then
+			local Value: { Key: string, Aim: Vector3? } = SerdesFunctions.Gears_ReadEVENT_Use()
+			if Events.Reliable[27] ~= nil then
+				task.spawn(Events.Reliable[27], Player, Value)
+			else
+				if #Queue.Reliable[27] > 256 then
+					warn("[Blink]: Event queue of \"Use\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[27], {Player, Value} :: {any})
 			end
 		end
 	end
@@ -895,9 +1531,9 @@ local Returns = table.freeze({
 		end
 		},
 		Replace = {
-		On = function(Listener: (Player, { Floor: number, Slot: number }) -> ({ Component: string, Variant: string })): ()
+		On = function(Listener: (Player, { Floor: number, Slot: number }) -> (boolean)): ()
 			Events.Reliable[4] = function(Player: Player, Value: { Floor: number, Slot: number }, InvocationIdentifier: number): ()
-				local ReturnValue: { Component: string, Variant: string };
+				local ReturnValue: boolean;
 				local Success, Error = pcall(function ()
 					ReturnValue = Listener(Player, Value)
 				end)
@@ -922,10 +1558,10 @@ local Returns = table.freeze({
 			end)
 		end
 		},
-		Drop = {
-		On = function(Listener: (Player, nil) -> (boolean)): ()
-			Events.Reliable[5] = function(Player: Player, Value: nil, InvocationIdentifier: number): ()
-				local ReturnValue: boolean;
+		RollSlot = {
+		On = function(Listener: (Player, { Floor: number, Slot: number, Component: string }) -> ({ Component: string, Variant: string })): ()
+			Events.Reliable[5] = function(Player: Player, Value: { Floor: number, Slot: number, Component: string }, InvocationIdentifier: number): ()
+				local ReturnValue: { Component: string, Variant: string };
 				local Success, Error = pcall(function ()
 					ReturnValue = Listener(Player, Value)
 				end)
@@ -935,9 +1571,9 @@ local Returns = table.freeze({
 					buffer.writeu8(SendBuffer, Position, 5)
 					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
 					buffer.writeu8(SendBuffer, Position + 2, 0)
-					warn(`"Drop" encountered an error, {Error}`)
+					warn(`"RollSlot" encountered an error, {Error}`)
 				else
-					SerdesFunctions.Items_WriteFUNCTION_RETURN_Drop(ReturnValue, InvocationIdentifier)
+					SerdesFunctions.Items_WriteFUNCTION_RETURN_RollSlot(ReturnValue, InvocationIdentifier)
 				end
 				PlayersMap[Player] = Save()
 			end
@@ -950,32 +1586,38 @@ local Returns = table.freeze({
 			end)
 		end
 		},
-	},
-	Stealing = {
-	},
-	Purchases = {
-		BuyDesk = {
-			On = function(Listener: (Player: Player, Value: nil) -> ()): () -> ()
-				Events.Reliable[6] = Listener
-				for Index, Arguments in Queue.Reliable[6] do
-					task.spawn(Listener, table.unpack(Arguments))
+		Stash = {
+		On = function(Listener: (Player, nil) -> (boolean)): ()
+			Events.Reliable[6] = function(Player: Player, Value: nil, InvocationIdentifier: number): ()
+				local ReturnValue: boolean;
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 6)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"Stash" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Items_WriteFUNCTION_RETURN_Stash(ReturnValue, InvocationIdentifier)
 				end
-				Queue.Reliable[6] = {}
-				return function (): ()
-					if Events.Reliable[6] == Listener then
-						Events.Reliable[6] = nil
-					end
-				end
+				PlayersMap[Player] = Save()
 			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[6] or {}
+				Queue.Reliable[6] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[6](table.unpack(Arguments))
+				end
+			end)
+		end
 		},
-	},
-	NPCs = {
-	},
-	Employees = {
-		GetAll = {
-		On = function(Listener: (Player, nil) -> ({ { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? } })): ()
-			Events.Reliable[7] = function(Player: Player, Value: nil, InvocationIdentifier: number): ()
-				local ReturnValue: { { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? } };
+		Equip = {
+		On = function(Listener: (Player, number) -> (boolean)): ()
+			Events.Reliable[7] = function(Player: Player, Value: number, InvocationIdentifier: number): ()
+				local ReturnValue: boolean;
 				local Success, Error = pcall(function ()
 					ReturnValue = Listener(Player, Value)
 				end)
@@ -985,9 +1627,9 @@ local Returns = table.freeze({
 					buffer.writeu8(SendBuffer, Position, 7)
 					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
 					buffer.writeu8(SendBuffer, Position + 2, 0)
-					warn(`"GetAll" encountered an error, {Error}`)
+					warn(`"Equip" encountered an error, {Error}`)
 				else
-					SerdesFunctions.Employees_WriteFUNCTION_RETURN_GetAll(ReturnValue, InvocationIdentifier)
+					SerdesFunctions.Items_WriteFUNCTION_RETURN_Equip(ReturnValue, InvocationIdentifier)
 				end
 				PlayersMap[Player] = Save()
 			end
@@ -996,6 +1638,238 @@ local Returns = table.freeze({
 				Queue.Reliable[7] = nil
 				for Index, Arguments in EventQueue do
 					Events.Reliable[7](table.unpack(Arguments))
+				end
+			end)
+		end
+		},
+	},
+	Stealing = {
+		Steal = {
+		On = function(Listener: (Player, { Owner: Player, Floor: number, Slot: number }) -> ({ Name: string, Type: string })): ()
+			Events.Reliable[8] = function(Player: Player, Value: { Owner: Player, Floor: number, Slot: number }, InvocationIdentifier: number): ()
+				local ReturnValue: { Name: string, Type: string };
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 8)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"Steal" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Stealing_WriteFUNCTION_RETURN_Steal(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[8] or {}
+				Queue.Reliable[8] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[8](table.unpack(Arguments))
+				end
+			end)
+		end
+		},
+	},
+	Visiting = {
+		Entered = {
+			Fire = function(Player: Player, Value: { Owner: Player, Desks: { { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? } } }): ()
+				Load(PlayersMap[Player])
+				SerdesFunctions.Visiting_WriteEVENT_Entered(Value)
+				PlayersMap[Player] = Save()
+			end,
+			FireAll = function(Value: { Owner: Player, Desks: { { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? } } }): ()
+				Load()
+				SerdesFunctions.Visiting_WriteEVENT_Entered(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireList = function(List: {Player}, Value: { Owner: Player, Desks: { { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? } } }): ()
+				Load()
+				SerdesFunctions.Visiting_WriteEVENT_Entered(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in List do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireExcept = function(Except: Player, Value: { Owner: Player, Desks: { { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? } } }): ()
+				Load()
+				SerdesFunctions.Visiting_WriteEVENT_Entered(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					if Player == Except then
+						continue
+					end
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+		},
+		DeskChanged = {
+			Fire = function(Player: Player, Value: { Owner: Player, Desk: { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }, Removed: boolean }): ()
+				Load(PlayersMap[Player])
+				SerdesFunctions.Visiting_WriteEVENT_DeskChanged(Value)
+				PlayersMap[Player] = Save()
+			end,
+			FireAll = function(Value: { Owner: Player, Desk: { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }, Removed: boolean }): ()
+				Load()
+				SerdesFunctions.Visiting_WriteEVENT_DeskChanged(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireList = function(List: {Player}, Value: { Owner: Player, Desk: { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }, Removed: boolean }): ()
+				Load()
+				SerdesFunctions.Visiting_WriteEVENT_DeskChanged(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in List do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireExcept = function(Except: Player, Value: { Owner: Player, Desk: { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }, Removed: boolean }): ()
+				Load()
+				SerdesFunctions.Visiting_WriteEVENT_DeskChanged(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					if Player == Except then
+						continue
+					end
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+		},
+		Left = {
+			Fire = function(Player: Player, Value: Player): ()
+				Load(PlayersMap[Player])
+				SerdesFunctions.Visiting_WriteEVENT_Left(Value)
+				PlayersMap[Player] = Save()
+			end,
+			FireAll = function(Value: Player): ()
+				Load()
+				SerdesFunctions.Visiting_WriteEVENT_Left(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireList = function(List: {Player}, Value: Player): ()
+				Load()
+				SerdesFunctions.Visiting_WriteEVENT_Left(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in List do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireExcept = function(Except: Player, Value: Player): ()
+				Load()
+				SerdesFunctions.Visiting_WriteEVENT_Left(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					if Player == Except then
+						continue
+					end
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+		},
+	},
+	Purchases = {
+		BuyDesk = {
+		On = function(Listener: (Player, nil) -> (boolean)): ()
+			Events.Reliable[12] = function(Player: Player, Value: nil, InvocationIdentifier: number): ()
+				local ReturnValue: boolean;
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 12)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"BuyDesk" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Purchases_WriteFUNCTION_RETURN_BuyDesk(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[12] or {}
+				Queue.Reliable[12] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[12](table.unpack(Arguments))
+				end
+			end)
+		end
+		},
+	},
+	NPCs = {
+	},
+	Employees = {
+		GetAll = {
+		On = function(Listener: (Player, nil) -> ({ { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? } })): ()
+			Events.Reliable[13] = function(Player: Player, Value: nil, InvocationIdentifier: number): ()
+				local ReturnValue: { { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? } };
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 13)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"GetAll" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Employees_WriteFUNCTION_RETURN_GetAll(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[13] or {}
+				Queue.Reliable[13] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[13](table.unpack(Arguments))
 				end
 			end)
 		end
@@ -1186,7 +2060,7 @@ local Returns = table.freeze({
 		},
 		Buy = {
 		On = function(Listener: (Player, number) -> (boolean)): ()
-			Events.Reliable[12] = function(Player: Player, Value: number, InvocationIdentifier: number): ()
+			Events.Reliable[18] = function(Player: Player, Value: number, InvocationIdentifier: number): ()
 				local ReturnValue: boolean;
 				local Success, Error = pcall(function ()
 					ReturnValue = Listener(Player, Value)
@@ -1194,7 +2068,7 @@ local Returns = table.freeze({
 				Load(PlayersMap[Player])
 				if Success ~= true then
 					local Position = Allocate(3)
-					buffer.writeu8(SendBuffer, Position, 12)
+					buffer.writeu8(SendBuffer, Position, 18)
 					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
 					buffer.writeu8(SendBuffer, Position + 2, 0)
 					warn(`"Buy" encountered an error, {Error}`)
@@ -1204,13 +2078,325 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 			task.spawn(function (): ()
-				local EventQueue = Queue.Reliable[12] or {}
-				Queue.Reliable[12] = nil
+				local EventQueue = Queue.Reliable[18] or {}
+				Queue.Reliable[18] = nil
 				for Index, Arguments in EventQueue do
-					Events.Reliable[12](table.unpack(Arguments))
+					Events.Reliable[18](table.unpack(Arguments))
 				end
 			end)
 		end
+		},
+		Sell = {
+		On = function(Listener: (Player, { Floor: number, Slot: number }) -> (boolean)): ()
+			Events.Reliable[19] = function(Player: Player, Value: { Floor: number, Slot: number }, InvocationIdentifier: number): ()
+				local ReturnValue: boolean;
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 19)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"Sell" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Employees_WriteFUNCTION_RETURN_Sell(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[19] or {}
+				Queue.Reliable[19] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[19](table.unpack(Arguments))
+				end
+			end)
+		end
+		},
+		Move = {
+		On = function(Listener: (Player, { FromFloor: number, FromSlot: number, ToFloor: number, ToSlot: number }) -> (boolean)): ()
+			Events.Reliable[20] = function(Player: Player, Value: { FromFloor: number, FromSlot: number, ToFloor: number, ToSlot: number }, InvocationIdentifier: number): ()
+				local ReturnValue: boolean;
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 20)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"Move" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Employees_WriteFUNCTION_RETURN_Move(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[20] or {}
+				Queue.Reliable[20] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[20](table.unpack(Arguments))
+				end
+			end)
+		end
+		},
+	},
+	Upgrades = {
+		Buy = {
+		On = function(Listener: (Player, string) -> (boolean)): ()
+			Events.Reliable[21] = function(Player: Player, Value: string, InvocationIdentifier: number): ()
+				local ReturnValue: boolean;
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 21)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"Buy" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Upgrades_WriteFUNCTION_RETURN_Buy(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[21] or {}
+				Queue.Reliable[21] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[21](table.unpack(Arguments))
+				end
+			end)
+		end
+		},
+	},
+	Shop = {
+		DevBuy = {
+		On = function(Listener: (Player, string) -> (boolean)): ()
+			Events.Reliable[22] = function(Player: Player, Value: string, InvocationIdentifier: number): ()
+				local ReturnValue: boolean;
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 22)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"DevBuy" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Shop_WriteFUNCTION_RETURN_DevBuy(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[22] or {}
+				Queue.Reliable[22] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[22](table.unpack(Arguments))
+				end
+			end)
+		end
+		},
+	},
+	Floors = {
+		Travel = {
+		On = function(Listener: (Player, number) -> (boolean)): ()
+			Events.Reliable[23] = function(Player: Player, Value: number, InvocationIdentifier: number): ()
+				local ReturnValue: boolean;
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 23)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"Travel" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Floors_WriteFUNCTION_RETURN_Travel(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[23] or {}
+				Queue.Reliable[23] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[23](table.unpack(Arguments))
+				end
+			end)
+		end
+		},
+	},
+	Notices = {
+		Stolen = {
+			Fire = function(Player: Player, Value: { Thief: Player, Name: string, Type: string }): ()
+				Load(PlayersMap[Player])
+				SerdesFunctions.Notices_WriteEVENT_Stolen(Value)
+				PlayersMap[Player] = Save()
+			end,
+			FireAll = function(Value: { Thief: Player, Name: string, Type: string }): ()
+				Load()
+				SerdesFunctions.Notices_WriteEVENT_Stolen(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireList = function(List: {Player}, Value: { Thief: Player, Name: string, Type: string }): ()
+				Load()
+				SerdesFunctions.Notices_WriteEVENT_Stolen(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in List do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireExcept = function(Except: Player, Value: { Thief: Player, Name: string, Type: string }): ()
+				Load()
+				SerdesFunctions.Notices_WriteEVENT_Stolen(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					if Player == Except then
+						continue
+					end
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+		},
+	},
+	Gears = {
+		Buy = {
+		On = function(Listener: (Player, string) -> (boolean)): ()
+			Events.Reliable[25] = function(Player: Player, Value: string, InvocationIdentifier: number): ()
+				local ReturnValue: boolean;
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 25)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"Buy" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Gears_WriteFUNCTION_RETURN_Buy(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[25] or {}
+				Queue.Reliable[25] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[25](table.unpack(Arguments))
+				end
+			end)
+		end
+		},
+		Equip = {
+		On = function(Listener: (Player, { Key: string, On: boolean }) -> (boolean)): ()
+			Events.Reliable[26] = function(Player: Player, Value: { Key: string, On: boolean }, InvocationIdentifier: number): ()
+				local ReturnValue: boolean;
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 26)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"Equip" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Gears_WriteFUNCTION_RETURN_Equip(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[26] or {}
+				Queue.Reliable[26] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[26](table.unpack(Arguments))
+				end
+			end)
+		end
+		},
+		Use = {
+			On = function(Listener: (Player: Player, Value: { Key: string, Aim: Vector3? }) -> ()): () -> ()
+				Events.Reliable[27] = Listener
+				for Index, Arguments in Queue.Reliable[27] do
+					task.spawn(Listener, table.unpack(Arguments))
+				end
+				Queue.Reliable[27] = {}
+				return function (): ()
+					if Events.Reliable[27] == Listener then
+						Events.Reliable[27] = nil
+					end
+				end
+			end
+		},
+		Hit = {
+			Fire = function(Player: Player, Value: number): ()
+				Load(PlayersMap[Player])
+				SerdesFunctions.Gears_WriteEVENT_Hit(Value)
+				PlayersMap[Player] = Save()
+			end,
+			FireAll = function(Value: number): ()
+				Load()
+				SerdesFunctions.Gears_WriteEVENT_Hit(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireList = function(List: {Player}, Value: number): ()
+				Load()
+				SerdesFunctions.Gears_WriteEVENT_Hit(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in List do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireExcept = function(Except: Player, Value: number): ()
+				Load()
+				SerdesFunctions.Gears_WriteEVENT_Hit(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					if Player == Except then
+						continue
+					end
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
 		},
 	},
 })

@@ -167,13 +167,30 @@ Queue.Reliable[2] = table.create(256)
 Queue.Reliable[3] = table.create(256)
 Queue.Reliable[4] = table.create(256)
 Queue.Reliable[5] = table.create(256)
+Queue.Reliable[6] = table.create(256)
 Queue.Reliable[7] = table.create(256)
 Queue.Reliable[8] = table.create(256)
 Queue.Reliable[9] = table.create(256)
 Queue.Reliable[10] = table.create(256)
 Queue.Reliable[11] = table.create(256)
 Queue.Reliable[12] = table.create(256)
+Queue.Reliable[13] = table.create(256)
+Queue.Reliable[14] = table.create(256)
+Queue.Reliable[15] = table.create(256)
+Queue.Reliable[16] = table.create(256)
+Queue.Reliable[17] = table.create(256)
+Queue.Reliable[18] = table.create(256)
+Queue.Reliable[19] = table.create(256)
+Queue.Reliable[20] = table.create(256)
+Queue.Reliable[21] = table.create(256)
+Queue.Reliable[22] = table.create(256)
+Queue.Reliable[23] = table.create(256)
+Queue.Reliable[24] = table.create(256)
+Queue.Reliable[25] = table.create(256)
+Queue.Reliable[26] = table.create(256)
+Queue.Reliable[28] = table.create(256)
 export type Player = Player
+export type Visiting_Desk = { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }
 export type Employees_UID = number
 export type Employees_Position = Vector3
 export type Employees_Spawn = { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? }
@@ -305,7 +322,31 @@ function SerdesFunctions.Items_WriteFUNCTION_DATA_Replace(Value: { Floor: number
 	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.Slot)
 end
 
-function SerdesFunctions.Items_ReadFUNCTION_RETURN_Replace(): ({ Component: string, Variant: string })
+function SerdesFunctions.Items_ReadFUNCTION_RETURN_Replace(): (boolean)
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	return Value
+end
+
+function SerdesFunctions.Items_WriteFUNCTION_DATA_RollSlot(Value: { Floor: number, Slot: number, Component: string }, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 5 bytes
+	local BLOCK_START = Allocate(5)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 5)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.Floor)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.Slot)
+	local Length = #Value.Component
+	buffer.writeu8(SendBuffer, BLOCK_START + 4, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.Component, Length)
+end
+
+function SerdesFunctions.Items_ReadFUNCTION_RETURN_RollSlot(): ({ Component: string, Variant: string })
 	-- Read BLOCK: 3 bytes
 	local BLOCK_START = Read(3)
 	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -324,14 +365,14 @@ function SerdesFunctions.Items_ReadFUNCTION_RETURN_Replace(): ({ Component: stri
 	return Value
 end
 
-function SerdesFunctions.Items_WriteFUNCTION_DATA_Drop(Value: nil, InvocationIdentifier: number): ()
+function SerdesFunctions.Items_WriteFUNCTION_DATA_Stash(Value: nil, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 5)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 6)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
 end
 
-function SerdesFunctions.Items_ReadFUNCTION_RETURN_Drop(): (boolean)
+function SerdesFunctions.Items_ReadFUNCTION_RETURN_Stash(): (boolean)
 	-- Read BLOCK: 2 bytes
 	local BLOCK_START = Read(2)
 	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -342,16 +383,233 @@ function SerdesFunctions.Items_ReadFUNCTION_RETURN_Drop(): (boolean)
 	return Value
 end
 
-function SerdesFunctions.Purchases_WriteEVENT_BuyDesk(Value: nil): ()
-	-- Allocate BLOCK: 1 bytes
-	local BLOCK_START = Allocate(1)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 6)
+function SerdesFunctions.Items_WriteFUNCTION_DATA_Equip(Value: number, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 7)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value)
+end
+
+function SerdesFunctions.Items_ReadFUNCTION_RETURN_Equip(): (boolean)
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	return Value
+end
+
+function SerdesFunctions.Stealing_WriteFUNCTION_DATA_Steal(Value: { Owner: Player, Floor: number, Slot: number }, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 8)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	table.insert(SendInstances, Value.Owner or Null)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.Floor)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.Slot)
+end
+
+function SerdesFunctions.Stealing_ReadFUNCTION_RETURN_Steal(): ({ Name: string, Type: string })
+	-- Read BLOCK: 3 bytes
+	local BLOCK_START = Read(3)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = {} :: any
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	Value.Name = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value.Name < 1 then error(`Expected length of "Value.Name" to be larger than 1, got {#Value.Name} instead.`) end
+	if #Value.Name > 20 then error(`Expected length of "Value.Name" to be smaller than 20, got {#Value.Name} instead.`) end
+	Length = buffer.readu8(RecieveBuffer, BLOCK_START + 2)
+	Value.Type = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value.Type < 1 then error(`Expected length of "Value.Type" to be larger than 1, got {#Value.Type} instead.`) end
+	if #Value.Type > 20 then error(`Expected length of "Value.Type" to be smaller than 20, got {#Value.Type} instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Visiting_ReadEVENT_Entered(): ({ Owner: Player, Desks: { { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? } } })
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Value = {} :: any
+	RecieveInstanceCursor += 1
+	Value.Owner = RecieveInstances[RecieveInstanceCursor]
+	if typeof(Value.Owner) ~= "Instance" then error(`Expected an Instance, got {typeof(Value.Owner)} instead.`) end
+	if not Value.Owner:IsA("Player") then error(`Expected an Instance of type "Player", got "{Value.Owner.ClassName}" instead.`) end
+	-- START ARRAY
+	local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+	if Length < 0 then error(`Expected "Length" to be larger than 0, got {Length} instead.`) end
+	if Length > 256 then error(`Expected "Length" to be smaller than 256, got {Length} instead.`) end
+	Value.Desks = table.create(Length)
+		-- Read BLOCK: 7 bytes
+	local ARRAY_START_1 = Read(7 * Length)
+	for Index = 1, Length do
+		local Item_1 = {} :: any
+		-- Read 1
+		local OPERATION_OFFSET_0 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		Item_1.Floor = buffer.readu8(RecieveBuffer, OPERATION_OFFSET_0)
+		if Item_1.Floor < 1 then error(`Expected "Item_1.Floor" to be larger than 1, got {Item_1.Floor} instead.`) end
+		if Item_1.Floor > 16 then error(`Expected "Item_1.Floor" to be smaller than 16, got {Item_1.Floor} instead.`) end
+		-- Read 1
+		local OPERATION_OFFSET_1 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		Item_1.Slot = buffer.readu8(RecieveBuffer, OPERATION_OFFSET_1)
+		if Item_1.Slot < 1 then error(`Expected "Item_1.Slot" to be larger than 1, got {Item_1.Slot} instead.`) end
+		if Item_1.Slot > 16 then error(`Expected "Item_1.Slot" to be smaller than 16, got {Item_1.Slot} instead.`) end
+		-- Read 1
+		local OPERATION_OFFSET_2 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		if buffer.readu8(RecieveBuffer, OPERATION_OFFSET_2) == 1 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			Item_1.Computer = buffer.readstring(RecieveBuffer, Read(Length), Length)
+			if #Item_1.Computer < 1 then error(`Expected length of "Item_1.Computer" to be larger than 1, got {#Item_1.Computer} instead.`) end
+			if #Item_1.Computer > 20 then error(`Expected length of "Item_1.Computer" to be smaller than 20, got {#Item_1.Computer} instead.`) end
+		end
+		-- Read 1
+		local OPERATION_OFFSET_3 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		if buffer.readu8(RecieveBuffer, OPERATION_OFFSET_3) == 1 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			Item_1.Keyboard = buffer.readstring(RecieveBuffer, Read(Length), Length)
+			if #Item_1.Keyboard < 1 then error(`Expected length of "Item_1.Keyboard" to be larger than 1, got {#Item_1.Keyboard} instead.`) end
+			if #Item_1.Keyboard > 20 then error(`Expected length of "Item_1.Keyboard" to be smaller than 20, got {#Item_1.Keyboard} instead.`) end
+		end
+		-- Read 1
+		local OPERATION_OFFSET_4 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		if buffer.readu8(RecieveBuffer, OPERATION_OFFSET_4) == 1 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			Item_1.Monitor = buffer.readstring(RecieveBuffer, Read(Length), Length)
+			if #Item_1.Monitor < 1 then error(`Expected length of "Item_1.Monitor" to be larger than 1, got {#Item_1.Monitor} instead.`) end
+			if #Item_1.Monitor > 20 then error(`Expected length of "Item_1.Monitor" to be smaller than 20, got {#Item_1.Monitor} instead.`) end
+		end
+		-- Read 1
+		local OPERATION_OFFSET_5 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		if buffer.readu8(RecieveBuffer, OPERATION_OFFSET_5) == 1 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			Item_1.Employee = buffer.readstring(RecieveBuffer, Read(Length), Length)
+			if #Item_1.Employee < 1 then error(`Expected length of "Item_1.Employee" to be larger than 1, got {#Item_1.Employee} instead.`) end
+			if #Item_1.Employee > 20 then error(`Expected length of "Item_1.Employee" to be smaller than 20, got {#Item_1.Employee} instead.`) end
+		end
+		-- Read 1
+		local OPERATION_OFFSET_6 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		if buffer.readu8(RecieveBuffer, OPERATION_OFFSET_6) == 1 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			Item_1.EmployeeName = buffer.readstring(RecieveBuffer, Read(Length), Length)
+			if #Item_1.EmployeeName < 1 then error(`Expected length of "Item_1.EmployeeName" to be larger than 1, got {#Item_1.EmployeeName} instead.`) end
+			if #Item_1.EmployeeName > 20 then error(`Expected length of "Item_1.EmployeeName" to be smaller than 20, got {#Item_1.EmployeeName} instead.`) end
+		end
+		table.insert(Value.Desks, Item_1)
+	end
+	-- END ARRAY
+	return Value
+end
+
+function SerdesFunctions.Visiting_ReadEVENT_DeskChanged(): ({ Owner: Player, Desk: { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }, Removed: boolean })
+	-- Read BLOCK: 8 bytes
+	local BLOCK_START = Read(8)
+	local Value = {} :: any
+	RecieveInstanceCursor += 1
+	Value.Owner = RecieveInstances[RecieveInstanceCursor]
+	if typeof(Value.Owner) ~= "Instance" then error(`Expected an Instance, got {typeof(Value.Owner)} instead.`) end
+	if not Value.Owner:IsA("Player") then error(`Expected an Instance of type "Player", got "{Value.Owner.ClassName}" instead.`) end
+	Value.Desk = {} :: any
+	Value.Desk.Floor = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Value.Desk.Floor < 1 then error(`Expected "Value.Desk.Floor" to be larger than 1, got {Value.Desk.Floor} instead.`) end
+	if Value.Desk.Floor > 16 then error(`Expected "Value.Desk.Floor" to be smaller than 16, got {Value.Desk.Floor} instead.`) end
+	Value.Desk.Slot = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	if Value.Desk.Slot < 1 then error(`Expected "Value.Desk.Slot" to be larger than 1, got {Value.Desk.Slot} instead.`) end
+	if Value.Desk.Slot > 16 then error(`Expected "Value.Desk.Slot" to be smaller than 16, got {Value.Desk.Slot} instead.`) end
+	if buffer.readu8(RecieveBuffer, BLOCK_START + 2) == 1 then
+		-- Read BLOCK: 1 bytes
+		local BLOCK_START = Read(1)
+		local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+		Value.Desk.Computer = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Value.Desk.Computer < 1 then error(`Expected length of "Value.Desk.Computer" to be larger than 1, got {#Value.Desk.Computer} instead.`) end
+		if #Value.Desk.Computer > 20 then error(`Expected length of "Value.Desk.Computer" to be smaller than 20, got {#Value.Desk.Computer} instead.`) end
+	end
+	if buffer.readu8(RecieveBuffer, BLOCK_START + 3) == 1 then
+		-- Read BLOCK: 1 bytes
+		local BLOCK_START = Read(1)
+		local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+		Value.Desk.Keyboard = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Value.Desk.Keyboard < 1 then error(`Expected length of "Value.Desk.Keyboard" to be larger than 1, got {#Value.Desk.Keyboard} instead.`) end
+		if #Value.Desk.Keyboard > 20 then error(`Expected length of "Value.Desk.Keyboard" to be smaller than 20, got {#Value.Desk.Keyboard} instead.`) end
+	end
+	if buffer.readu8(RecieveBuffer, BLOCK_START + 4) == 1 then
+		-- Read BLOCK: 1 bytes
+		local BLOCK_START = Read(1)
+		local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+		Value.Desk.Monitor = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Value.Desk.Monitor < 1 then error(`Expected length of "Value.Desk.Monitor" to be larger than 1, got {#Value.Desk.Monitor} instead.`) end
+		if #Value.Desk.Monitor > 20 then error(`Expected length of "Value.Desk.Monitor" to be smaller than 20, got {#Value.Desk.Monitor} instead.`) end
+	end
+	if buffer.readu8(RecieveBuffer, BLOCK_START + 5) == 1 then
+		-- Read BLOCK: 1 bytes
+		local BLOCK_START = Read(1)
+		local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+		Value.Desk.Employee = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Value.Desk.Employee < 1 then error(`Expected length of "Value.Desk.Employee" to be larger than 1, got {#Value.Desk.Employee} instead.`) end
+		if #Value.Desk.Employee > 20 then error(`Expected length of "Value.Desk.Employee" to be smaller than 20, got {#Value.Desk.Employee} instead.`) end
+	end
+	if buffer.readu8(RecieveBuffer, BLOCK_START + 6) == 1 then
+		-- Read BLOCK: 1 bytes
+		local BLOCK_START = Read(1)
+		local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+		Value.Desk.EmployeeName = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Value.Desk.EmployeeName < 1 then error(`Expected length of "Value.Desk.EmployeeName" to be larger than 1, got {#Value.Desk.EmployeeName} instead.`) end
+		if #Value.Desk.EmployeeName > 20 then error(`Expected length of "Value.Desk.EmployeeName" to be smaller than 20, got {#Value.Desk.EmployeeName} instead.`) end
+	end
+	Value.Removed = (buffer.readu8(RecieveBuffer, BLOCK_START + 7) == 1)
+	return Value
+end
+
+function SerdesFunctions.Visiting_ReadEVENT_Left(): (Player)
+	RecieveInstanceCursor += 1
+	local Value = RecieveInstances[RecieveInstanceCursor]
+	if typeof(Value) ~= "Instance" then error(`Expected an Instance, got {typeof(Value)} instead.`) end
+	if not Value:IsA("Player") then error(`Expected an Instance of type "Player", got "{Value.ClassName}" instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Purchases_WriteFUNCTION_DATA_BuyDesk(Value: nil, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 2 bytes
+	local BLOCK_START = Allocate(2)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 12)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+end
+
+function SerdesFunctions.Purchases_ReadFUNCTION_RETURN_BuyDesk(): (boolean)
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	return Value
 end
 
 function SerdesFunctions.Employees_WriteFUNCTION_DATA_GetAll(Value: nil, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 7)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 13)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
 end
 
@@ -570,7 +828,7 @@ end
 function SerdesFunctions.Employees_WriteFUNCTION_DATA_Buy(Value: number, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 6 bytes
 	local BLOCK_START = Allocate(6)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 12)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 18)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
 	buffer.writeu32(SendBuffer, BLOCK_START + 2, Value)
 end
@@ -583,6 +841,201 @@ function SerdesFunctions.Employees_ReadFUNCTION_RETURN_Buy(): (boolean)
 		error("Server encountered an error.")
 	end
 	local Value = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	return Value
+end
+
+function SerdesFunctions.Employees_WriteFUNCTION_DATA_Sell(Value: { Floor: number, Slot: number }, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 19)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.Floor)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.Slot)
+end
+
+function SerdesFunctions.Employees_ReadFUNCTION_RETURN_Sell(): (boolean)
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	return Value
+end
+
+function SerdesFunctions.Employees_WriteFUNCTION_DATA_Move(Value: { FromFloor: number, FromSlot: number, ToFloor: number, ToSlot: number }, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 6 bytes
+	local BLOCK_START = Allocate(6)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 20)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.FromFloor)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.FromSlot)
+	buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.ToFloor)
+	buffer.writeu8(SendBuffer, BLOCK_START + 5, Value.ToSlot)
+end
+
+function SerdesFunctions.Employees_ReadFUNCTION_RETURN_Move(): (boolean)
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	return Value
+end
+
+function SerdesFunctions.Upgrades_WriteFUNCTION_DATA_Buy(Value: string, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 21)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	local Length = #Value
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value, Length)
+end
+
+function SerdesFunctions.Upgrades_ReadFUNCTION_RETURN_Buy(): (boolean)
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	return Value
+end
+
+function SerdesFunctions.Shop_WriteFUNCTION_DATA_DevBuy(Value: string, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 22)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	local Length = #Value
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value, Length)
+end
+
+function SerdesFunctions.Shop_ReadFUNCTION_RETURN_DevBuy(): (boolean)
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	return Value
+end
+
+function SerdesFunctions.Floors_WriteFUNCTION_DATA_Travel(Value: number, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 23)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value)
+end
+
+function SerdesFunctions.Floors_ReadFUNCTION_RETURN_Travel(): (boolean)
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	return Value
+end
+
+function SerdesFunctions.Notices_ReadEVENT_Stolen(): ({ Thief: Player, Name: string, Type: string })
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Value = {} :: any
+	RecieveInstanceCursor += 1
+	Value.Thief = RecieveInstances[RecieveInstanceCursor]
+	if typeof(Value.Thief) ~= "Instance" then error(`Expected an Instance, got {typeof(Value.Thief)} instead.`) end
+	if not Value.Thief:IsA("Player") then error(`Expected an Instance of type "Player", got "{Value.Thief.ClassName}" instead.`) end
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	Value.Name = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value.Name < 1 then error(`Expected length of "Value.Name" to be larger than 1, got {#Value.Name} instead.`) end
+	if #Value.Name > 20 then error(`Expected length of "Value.Name" to be smaller than 20, got {#Value.Name} instead.`) end
+	Length = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	Value.Type = buffer.readstring(RecieveBuffer, Read(Length), Length)
+	if #Value.Type < 1 then error(`Expected length of "Value.Type" to be larger than 1, got {#Value.Type} instead.`) end
+	if #Value.Type > 20 then error(`Expected length of "Value.Type" to be smaller than 20, got {#Value.Type} instead.`) end
+	return Value
+end
+
+function SerdesFunctions.Gears_WriteFUNCTION_DATA_Buy(Value: string, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 25)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	local Length = #Value
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value, Length)
+end
+
+function SerdesFunctions.Gears_ReadFUNCTION_RETURN_Buy(): (boolean)
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	return Value
+end
+
+function SerdesFunctions.Gears_WriteFUNCTION_DATA_Equip(Value: { Key: string, On: boolean }, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 4 bytes
+	local BLOCK_START = Allocate(4)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 26)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	local Length = #Value.Key
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.Key, Length)
+	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.On and 1 or 0)
+end
+
+function SerdesFunctions.Gears_ReadFUNCTION_RETURN_Equip(): (boolean)
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = (buffer.readu8(RecieveBuffer, BLOCK_START + 1) == 1)
+	return Value
+end
+
+function SerdesFunctions.Gears_WriteEVENT_Use(Value: { Key: string, Aim: Vector3? }): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 27)
+	local Length = #Value.Key
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value.Key, Length)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.Aim ~= nil and 1 or 0)
+	if Value.Aim ~= nil then
+		-- Allocate BLOCK: 12 bytes
+		local BLOCK_START = Allocate(12)
+		local Vector = Value.Aim
+		buffer.writef32(SendBuffer, BLOCK_START + 0, Vector.X)
+		buffer.writef32(SendBuffer, BLOCK_START + 4, Vector.Y)
+		buffer.writef32(SendBuffer, BLOCK_START + 8, Vector.Z)
+	end
+end
+
+function SerdesFunctions.Gears_ReadEVENT_Hit(): (number)
+	-- Read BLOCK: 4 bytes
+	local BLOCK_START = Read(4)
+	local Value = buffer.readf32(RecieveBuffer, BLOCK_START + 0)
 	return Value
 end
 
@@ -607,15 +1060,35 @@ if not RunService:IsRunning() then
 		Replace = {
 			Invoke = NOOP
 		},
-		Drop = {
+		RollSlot = {
+			Invoke = NOOP
+		},
+		Stash = {
+			Invoke = NOOP
+		},
+		Equip = {
 			Invoke = NOOP
 		},
 	},
 	Stealing = {
+		Steal = {
+			Invoke = NOOP
+		},
+	},
+	Visiting = {
+		Entered = {
+			On = NOOP
+		},
+		DeskChanged = {
+			On = NOOP
+		},
+		Left = {
+			On = NOOP
+		},
 	},
 	Purchases = {
 		BuyDesk = {
-			Fire = NOOP
+			Invoke = NOOP
 		},
 	},
 	NPCs = {
@@ -638,6 +1111,46 @@ if not RunService:IsRunning() then
 		},
 		Buy = {
 			Invoke = NOOP
+		},
+		Sell = {
+			Invoke = NOOP
+		},
+		Move = {
+			Invoke = NOOP
+		},
+	},
+	Upgrades = {
+		Buy = {
+			Invoke = NOOP
+		},
+	},
+	Shop = {
+		DevBuy = {
+			Invoke = NOOP
+		},
+	},
+	Floors = {
+		Travel = {
+			Invoke = NOOP
+		},
+	},
+	Notices = {
+		Stolen = {
+			On = NOOP
+		},
+	},
+	Gears = {
+		Buy = {
+			Invoke = NOOP
+		},
+		Equip = {
+			Invoke = NOOP
+		},
+		Use = {
+			Fire = NOOP
+		},
+		Hit = {
+			On = NOOP
 		},
 	},
 	})
@@ -741,7 +1254,18 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 			local BLOCK_START = Read(1)
 			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 				local Success, ReturnValue = pcall(function ()
-					return SerdesFunctions.Items_ReadFUNCTION_RETURN_Drop()
+					return SerdesFunctions.Items_ReadFUNCTION_RETURN_RollSlot()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 6 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Items_ReadFUNCTION_RETURN_Stash()
 				end)
 			if Calls[InvocationIdentifier] ~= nil then
 				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
@@ -752,53 +1276,116 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 			local BLOCK_START = Read(1)
 			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 				local Success, ReturnValue = pcall(function ()
-					return SerdesFunctions.Employees_ReadFUNCTION_RETURN_GetAll()
+					return SerdesFunctions.Items_ReadFUNCTION_RETURN_Equip()
 				end)
 			if Calls[InvocationIdentifier] ~= nil then
 				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
 				Calls[InvocationIdentifier] = nil
 			end
 		elseif Index == 8 then
-			local Value: { { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? } } = SerdesFunctions.Employees_ReadEVENT_Added()
-			if Events.Reliable[8] ~= nil then
-				task.spawn(Events.Reliable[8], Value)
-			else
-				if #Queue.Reliable[8] > 256 then
-					warn("[Blink]: Event queue of \"Added\" exceeded 256, did you forget to implement a listener?")
-				end
-				table.insert(Queue.Reliable[8], {Value} :: {any})
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Stealing_ReadFUNCTION_RETURN_Steal()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
 			end
 		elseif Index == 9 then
-			local Value: { { UID: number, Position: Vector3 } } = SerdesFunctions.Employees_ReadEVENT_Moved()
+			local Value: { Owner: Player, Desks: { { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? } } } = SerdesFunctions.Visiting_ReadEVENT_Entered()
 			if Events.Reliable[9] ~= nil then
 				task.spawn(Events.Reliable[9], Value)
 			else
 				if #Queue.Reliable[9] > 256 then
-					warn("[Blink]: Event queue of \"Moved\" exceeded 256, did you forget to implement a listener?")
+					warn("[Blink]: Event queue of \"Entered\" exceeded 256, did you forget to implement a listener?")
 				end
 				table.insert(Queue.Reliable[9], {Value} :: {any})
 			end
 		elseif Index == 10 then
-			local Value: { number } = SerdesFunctions.Employees_ReadEVENT_Removed()
+			local Value: { Owner: Player, Desk: { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }, Removed: boolean } = SerdesFunctions.Visiting_ReadEVENT_DeskChanged()
 			if Events.Reliable[10] ~= nil then
 				task.spawn(Events.Reliable[10], Value)
 			else
 				if #Queue.Reliable[10] > 256 then
-					warn("[Blink]: Event queue of \"Removed\" exceeded 256, did you forget to implement a listener?")
+					warn("[Blink]: Event queue of \"DeskChanged\" exceeded 256, did you forget to implement a listener?")
 				end
 				table.insert(Queue.Reliable[10], {Value} :: {any})
 			end
 		elseif Index == 11 then
-			local Value: { { UID: number, Owner: Player? } } = SerdesFunctions.Employees_ReadEVENT_OwnerChanged()
+			local Value: Player = SerdesFunctions.Visiting_ReadEVENT_Left()
 			if Events.Reliable[11] ~= nil then
 				task.spawn(Events.Reliable[11], Value)
 			else
 				if #Queue.Reliable[11] > 256 then
-					warn("[Blink]: Event queue of \"OwnerChanged\" exceeded 256, did you forget to implement a listener?")
+					warn("[Blink]: Event queue of \"Left\" exceeded 256, did you forget to implement a listener?")
 				end
 				table.insert(Queue.Reliable[11], {Value} :: {any})
 			end
 		elseif Index == 12 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Purchases_ReadFUNCTION_RETURN_BuyDesk()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 13 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Employees_ReadFUNCTION_RETURN_GetAll()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 14 then
+			local Value: { { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? } } = SerdesFunctions.Employees_ReadEVENT_Added()
+			if Events.Reliable[14] ~= nil then
+				task.spawn(Events.Reliable[14], Value)
+			else
+				if #Queue.Reliable[14] > 256 then
+					warn("[Blink]: Event queue of \"Added\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[14], {Value} :: {any})
+			end
+		elseif Index == 15 then
+			local Value: { { UID: number, Position: Vector3 } } = SerdesFunctions.Employees_ReadEVENT_Moved()
+			if Events.Reliable[15] ~= nil then
+				task.spawn(Events.Reliable[15], Value)
+			else
+				if #Queue.Reliable[15] > 256 then
+					warn("[Blink]: Event queue of \"Moved\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[15], {Value} :: {any})
+			end
+		elseif Index == 16 then
+			local Value: { number } = SerdesFunctions.Employees_ReadEVENT_Removed()
+			if Events.Reliable[16] ~= nil then
+				task.spawn(Events.Reliable[16], Value)
+			else
+				if #Queue.Reliable[16] > 256 then
+					warn("[Blink]: Event queue of \"Removed\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[16], {Value} :: {any})
+			end
+		elseif Index == 17 then
+			local Value: { { UID: number, Owner: Player? } } = SerdesFunctions.Employees_ReadEVENT_OwnerChanged()
+			if Events.Reliable[17] ~= nil then
+				task.spawn(Events.Reliable[17], Value)
+			else
+				if #Queue.Reliable[17] > 256 then
+					warn("[Blink]: Event queue of \"OwnerChanged\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[17], {Value} :: {any})
+			end
+		elseif Index == 18 then
 			-- Read BLOCK: 1 bytes
 			local BLOCK_START = Read(1)
 			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -808,6 +1395,103 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 			if Calls[InvocationIdentifier] ~= nil then
 				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
 				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 19 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Employees_ReadFUNCTION_RETURN_Sell()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 20 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Employees_ReadFUNCTION_RETURN_Move()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 21 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Upgrades_ReadFUNCTION_RETURN_Buy()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 22 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Shop_ReadFUNCTION_RETURN_DevBuy()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 23 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Floors_ReadFUNCTION_RETURN_Travel()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 24 then
+			local Value: { Thief: Player, Name: string, Type: string } = SerdesFunctions.Notices_ReadEVENT_Stolen()
+			if Events.Reliable[24] ~= nil then
+				task.spawn(Events.Reliable[24], Value)
+			else
+				if #Queue.Reliable[24] > 256 then
+					warn("[Blink]: Event queue of \"Stolen\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[24], {Value} :: {any})
+			end
+		elseif Index == 25 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Gears_ReadFUNCTION_RETURN_Buy()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 26 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Gears_ReadFUNCTION_RETURN_Equip()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 28 then
+			local Value: number = SerdesFunctions.Gears_ReadEVENT_Hit()
+			if Events.Reliable[28] ~= nil then
+				task.spawn(Events.Reliable[28], Value)
+			else
+				if #Queue.Reliable[28] > 256 then
+					warn("[Blink]: Event queue of \"Hit\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[28], {Value} :: {any})
 			end
 		end
 	end
@@ -930,7 +1614,7 @@ local Returns = table.freeze({
 					OnCancel(function ()
 						Calls[InvocationIdentifier] = nil
 					end)
-					local Success, ReturnValue: { Component: string, Variant: string } = coroutine.yield()
+					local Success, ReturnValue: boolean = coroutine.yield()
 					if Success ~= true then
 						Reject("There was an exception while processing \"Replace\".")
 						return 
@@ -939,7 +1623,29 @@ local Returns = table.freeze({
 				end)
 			end
 		},
-		Drop = {
+		RollSlot = {
+			Invoke = function(Value: { Floor: number, Slot: number, Component: string })
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Items_WriteFUNCTION_DATA_RollSlot(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: { Component: string, Variant: string } = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"RollSlot\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
+			end
+		},
+		Stash = {
 			Invoke = function(Value: nil)
 				return Promise.new(function (Resolve, Reject, OnCancel)
 					local InvocationIdentifier = Invoke()
@@ -947,14 +1653,36 @@ local Returns = table.freeze({
 						Invocations -= 1
 						error("More than 256 calls are awaiting a response, this packet has been dropped.")
 					end
-					SerdesFunctions.Items_WriteFUNCTION_DATA_Drop(Value, InvocationIdentifier)
+					SerdesFunctions.Items_WriteFUNCTION_DATA_Stash(Value, InvocationIdentifier)
 					Calls[InvocationIdentifier] = coroutine.running()
 					OnCancel(function ()
 						Calls[InvocationIdentifier] = nil
 					end)
 					local Success, ReturnValue: boolean = coroutine.yield()
 					if Success ~= true then
-						Reject("There was an exception while processing \"Drop\".")
+						Reject("There was an exception while processing \"Stash\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
+			end
+		},
+		Equip = {
+			Invoke = function(Value: number)
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Items_WriteFUNCTION_DATA_Equip(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: boolean = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"Equip\".")
 						return 
 					end
 					Resolve(ReturnValue)
@@ -963,11 +1691,94 @@ local Returns = table.freeze({
 		},
 	},
 	Stealing = {
+		Steal = {
+			Invoke = function(Value: { Owner: Player, Floor: number, Slot: number })
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Stealing_WriteFUNCTION_DATA_Steal(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: { Name: string, Type: string } = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"Steal\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
+			end
+		},
+	},
+	Visiting = {
+		Entered = {
+			On = function(Listener: (Value: { Owner: Player, Desks: { { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? } } }) -> ()): () -> ()
+				Events.Reliable[9] = Listener
+				for Index, Arguments in Queue.Reliable[9] do
+					task.spawn(Listener, table.unpack(Arguments))
+				end
+				Queue.Reliable[9] = {}
+				return function (): ()
+					if Events.Reliable[9] == Listener then
+						Events.Reliable[9] = nil
+					end
+				end
+			end
+		},
+		DeskChanged = {
+			On = function(Listener: (Value: { Owner: Player, Desk: { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }, Removed: boolean }) -> ()): () -> ()
+				Events.Reliable[10] = Listener
+				for Index, Arguments in Queue.Reliable[10] do
+					task.spawn(Listener, table.unpack(Arguments))
+				end
+				Queue.Reliable[10] = {}
+				return function (): ()
+					if Events.Reliable[10] == Listener then
+						Events.Reliable[10] = nil
+					end
+				end
+			end
+		},
+		Left = {
+			On = function(Listener: (Value: Player) -> ()): () -> ()
+				Events.Reliable[11] = Listener
+				for Index, Arguments in Queue.Reliable[11] do
+					task.spawn(Listener, table.unpack(Arguments))
+				end
+				Queue.Reliable[11] = {}
+				return function (): ()
+					if Events.Reliable[11] == Listener then
+						Events.Reliable[11] = nil
+					end
+				end
+			end
+		},
 	},
 	Purchases = {
 		BuyDesk = {
-			Fire = function(Value: nil): ()
-				SerdesFunctions.Purchases_WriteEVENT_BuyDesk(Value)
+			Invoke = function(Value: nil)
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Purchases_WriteFUNCTION_DATA_BuyDesk(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: boolean = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"BuyDesk\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
 			end
 		},
 	},
@@ -998,56 +1809,56 @@ local Returns = table.freeze({
 		},
 		Added = {
 			On = function(Listener: (Value: { { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? } }) -> ()): () -> ()
-				Events.Reliable[8] = Listener
-				for Index, Arguments in Queue.Reliable[8] do
+				Events.Reliable[14] = Listener
+				for Index, Arguments in Queue.Reliable[14] do
 					task.spawn(Listener, table.unpack(Arguments))
 				end
-				Queue.Reliable[8] = {}
+				Queue.Reliable[14] = {}
 				return function (): ()
-					if Events.Reliable[8] == Listener then
-						Events.Reliable[8] = nil
+					if Events.Reliable[14] == Listener then
+						Events.Reliable[14] = nil
 					end
 				end
 			end
 		},
 		Moved = {
 			On = function(Listener: (Value: { { UID: number, Position: Vector3 } }) -> ()): () -> ()
-				Events.Reliable[9] = Listener
-				for Index, Arguments in Queue.Reliable[9] do
+				Events.Reliable[15] = Listener
+				for Index, Arguments in Queue.Reliable[15] do
 					task.spawn(Listener, table.unpack(Arguments))
 				end
-				Queue.Reliable[9] = {}
+				Queue.Reliable[15] = {}
 				return function (): ()
-					if Events.Reliable[9] == Listener then
-						Events.Reliable[9] = nil
+					if Events.Reliable[15] == Listener then
+						Events.Reliable[15] = nil
 					end
 				end
 			end
 		},
 		Removed = {
 			On = function(Listener: (Value: { number }) -> ()): () -> ()
-				Events.Reliable[10] = Listener
-				for Index, Arguments in Queue.Reliable[10] do
+				Events.Reliable[16] = Listener
+				for Index, Arguments in Queue.Reliable[16] do
 					task.spawn(Listener, table.unpack(Arguments))
 				end
-				Queue.Reliable[10] = {}
+				Queue.Reliable[16] = {}
 				return function (): ()
-					if Events.Reliable[10] == Listener then
-						Events.Reliable[10] = nil
+					if Events.Reliable[16] == Listener then
+						Events.Reliable[16] = nil
 					end
 				end
 			end
 		},
 		OwnerChanged = {
 			On = function(Listener: (Value: { { UID: number, Owner: Player? } }) -> ()): () -> ()
-				Events.Reliable[11] = Listener
-				for Index, Arguments in Queue.Reliable[11] do
+				Events.Reliable[17] = Listener
+				for Index, Arguments in Queue.Reliable[17] do
 					task.spawn(Listener, table.unpack(Arguments))
 				end
-				Queue.Reliable[11] = {}
+				Queue.Reliable[17] = {}
 				return function (): ()
-					if Events.Reliable[11] == Listener then
-						Events.Reliable[11] = nil
+					if Events.Reliable[17] == Listener then
+						Events.Reliable[17] = nil
 					end
 				end
 			end
@@ -1072,6 +1883,203 @@ local Returns = table.freeze({
 					end
 					Resolve(ReturnValue)
 				end)
+			end
+		},
+		Sell = {
+			Invoke = function(Value: { Floor: number, Slot: number })
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Employees_WriteFUNCTION_DATA_Sell(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: boolean = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"Sell\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
+			end
+		},
+		Move = {
+			Invoke = function(Value: { FromFloor: number, FromSlot: number, ToFloor: number, ToSlot: number })
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Employees_WriteFUNCTION_DATA_Move(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: boolean = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"Move\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
+			end
+		},
+	},
+	Upgrades = {
+		Buy = {
+			Invoke = function(Value: string)
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Upgrades_WriteFUNCTION_DATA_Buy(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: boolean = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"Buy\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
+			end
+		},
+	},
+	Shop = {
+		DevBuy = {
+			Invoke = function(Value: string)
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Shop_WriteFUNCTION_DATA_DevBuy(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: boolean = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"DevBuy\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
+			end
+		},
+	},
+	Floors = {
+		Travel = {
+			Invoke = function(Value: number)
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Floors_WriteFUNCTION_DATA_Travel(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: boolean = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"Travel\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
+			end
+		},
+	},
+	Notices = {
+		Stolen = {
+			On = function(Listener: (Value: { Thief: Player, Name: string, Type: string }) -> ()): () -> ()
+				Events.Reliable[24] = Listener
+				for Index, Arguments in Queue.Reliable[24] do
+					task.spawn(Listener, table.unpack(Arguments))
+				end
+				Queue.Reliable[24] = {}
+				return function (): ()
+					if Events.Reliable[24] == Listener then
+						Events.Reliable[24] = nil
+					end
+				end
+			end
+		},
+	},
+	Gears = {
+		Buy = {
+			Invoke = function(Value: string)
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Gears_WriteFUNCTION_DATA_Buy(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: boolean = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"Buy\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
+			end
+		},
+		Equip = {
+			Invoke = function(Value: { Key: string, On: boolean })
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Gears_WriteFUNCTION_DATA_Equip(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: boolean = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"Equip\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
+			end
+		},
+		Use = {
+			Fire = function(Value: { Key: string, Aim: Vector3? }): ()
+				SerdesFunctions.Gears_WriteEVENT_Use(Value)
+			end
+		},
+		Hit = {
+			On = function(Listener: (Value: number) -> ()): () -> ()
+				Events.Reliable[28] = Listener
+				for Index, Arguments in Queue.Reliable[28] do
+					task.spawn(Listener, table.unpack(Arguments))
+				end
+				Queue.Reliable[28] = {}
+				return function (): ()
+					if Events.Reliable[28] == Listener then
+						Events.Reliable[28] = nil
+					end
+				end
 			end
 		},
 	},

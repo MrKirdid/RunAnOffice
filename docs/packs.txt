@@ -1,0 +1,100 @@
+cash multiplier, each unlocks the next
+
+   2x       9
+   4x      19
+   8x      39
+  16x      79
+  32x     149
+  64x     279
+ 128x     499
+ 256x     899
+ 512x    1599
+
+
+server luck, each unlocks the next
+
+   2x      29    15 min
+   4x      59    15 min
+   8x     119    20 min
+  16x     219    20 min
+  32x     399    30 min
+  64x     699    30 min
+ 128x    1199    45 min
+ 256x    1999    60 min
+
+
+gamepasses
+
+super fast             49    3x walkspeed
+efficient employees    99
+better luck           149    2x roll luck
+super deals           199    30% off ingame costs
+auto roll             249
+super luck            299    3x roll luck
+extra floors          399    +16 desks
+divine hunter         649
+entrepreneur          899    2x cash, 1.5x employees
+vip                  1499    2x everything, tag, skin
+buy all              3799    -15% on missing
+
+
+packs
+
+starter       99    one time, first 48h
+weekly       249    repeatable, 7 days
+pro          799
+executive   1699
+ceo         4499
+
+
+starter 99
+  steampunk x6, 2 hamster
+  +2 pads, +0.5 luck
+  100k cash
+  2x cash rung
+
+weekly 249
+  space x12, 4 toasty
+  +1 pad
+  2.5m cash
+  1h 16x server luck
+
+pro 799
+  galaxy x24, 8 mr money
+  +4 pads, +2 luck
+  25m cash
+  32x cash rung
+
+executive 1699
+  hardcore x48, 16 king ceo
+  all 17 pads, +5 luck
+  250m cash
+  128x cash rung
+
+ceo 4499
+  all gamepasses
+  premium x60, 20 king ceo
+  +10 luck
+  512x cash rung
+  exclusive title + skin
+
+
+ids: computer, keyboard, monitor
+
+steampunk   138960511492611   106389553350332   138719314384237
+space        89613043477012    85537548013666    73375417258079
+galaxy       77919124745146   106121102729895   103663739233201
+hardcore     88247695074962    94202025628880   106402150086388
+premium     132700700236592    77355774327641   124455662978011
+
+starter icon   89765645822434
+bundle icon   124503020428640
+
+
+need renders
+
+all 21 employees
+pack icons: weekly, pro, executive
+pass icons: efficient employees, super luck, auto roll, extra floors,
+            super deals, entrepreneur, vip, divine hunter
+512x512 store icon for each pass and product

@@ -7,6 +7,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Assets = ReplicatedStorage:WaitForChild("Assets")
 
 local ItemDisplayController = require(Shared.Controllers.ItemDisplayController)
+local Items = require(Shared.Utilities.Items)
 local SoundController = require(Shared.Controllers.SoundController)
 local CarryController = require(Shared.Controllers.CarryController)
 local NetworkingClient = require(Shared.Networking.networkingClient)
@@ -31,7 +32,7 @@ local AutoRollInterval = 3
 local DeskDisplay = { Duration = DeskDisplayTime, OnTop = true }
 
 local PickupText = "Pick Up!"
-local PickupHold = 1
+local PickupHold = 0.33
 local PickupDistance = 10
 
 type Entries = { [string]: { Value: number, Rarity: number } }
@@ -172,6 +173,13 @@ function RollingService:_AddPickup(Model: Model, Card: BasePart, Final: Rolling.
 	Prompt.Parent = Point
 
 	Prompt.Triggered:Connect(function()
+		--> One part at a time. The server refuses this too; answering here saves the round trip
+		--> and the warning it would come back with.
+		if Items.IsHeld(PlayerData.Holding()) then
+			SoundController:Play("Error")
+			return
+		end
+
 		Prompt.Enabled = false
 
 		NetworkingClient.Items.PickUp

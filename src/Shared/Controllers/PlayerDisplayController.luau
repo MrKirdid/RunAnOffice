@@ -1,10 +1,16 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
+local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Assets = ReplicatedStorage:WaitForChild("Assets")
+
+local Format = require(Shared.Utilities.Format)
 
 local TemplateName = "PlayerDisplay"
 local RateAttribute = "MoneyPerSecond"
+
+--> set by StatusService while a cloak has the player: the card goes with the character
+local HiddenAttribute = "Hidden"
 local HeadName = "Head"
 
 --> Long enough to cover a slow character load, short enough that a character taken away mid-spawn
@@ -20,7 +26,7 @@ local function GetTemplate(): BillboardGui
 end
 
 local function FormatRate(Rate: any): string
-	return `${if type(Rate) == "number" then Rate else 0}/s`
+	return Format.Rate(if type(Rate) == "number" then Rate else 0)
 end
 
 function PlayerDisplayController:Refresh(Player: Player)
@@ -31,6 +37,7 @@ function PlayerDisplayController:Refresh(Player: Player)
 	end
 
 	Display.Frame.MoneyPerSecond.Text = FormatRate(Player:GetAttribute(RateAttribute))
+	Display.Enabled = Player:GetAttribute(HiddenAttribute) ~= true
 end
 
 function PlayerDisplayController:Remove(Player: Player)
@@ -65,6 +72,10 @@ end
 
 function PlayerDisplayController:Watch(Player: Player)
 	Player:GetAttributeChangedSignal(RateAttribute):Connect(function()
+		self:Refresh(Player)
+	end)
+
+	Player:GetAttributeChangedSignal(HiddenAttribute):Connect(function()
 		self:Refresh(Player)
 	end)
 

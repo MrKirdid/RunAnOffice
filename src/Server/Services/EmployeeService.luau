@@ -383,7 +383,8 @@ end
 
 --> Buying is a redirect rather than a claim: one already walking to somebody's plot is still for
 --> sale, and buying it just points it at a different desk. Nothing checks whether it is owned
---> already, only that it is not owned by the buyer.
+--> already, only that it is not owned by the buyer. That is the point of the walk: whoever pays
+--> last before it sits down gets it.
 function EmployeeService:Buy(Player: Player, UID: number): boolean
 	local Employee = EmployeeService.Employees[UID]
 
@@ -426,6 +427,12 @@ function EmployeeService:Buy(Player: Player, UID: number): boolean
 	Employee.Seat = Seat
 	Employee.TargetVector = table.remove(Path, 1) :: Vector3
 	Employee.Path = Path
+
+	--> counted at the purchase rather than the seat: the tutorial's hire step is over when the
+	--> player has paid, not once the walk is done
+	Data.TutorialHires(function(Current: number)
+		return Current + 1
+	end)
 
 	return true
 end

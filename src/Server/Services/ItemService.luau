@@ -6,6 +6,8 @@ local Shared = ReplicatedStorage.Shared
 local NetworkingServer = require(Shared.Networking.networkingServer)
 local PlayerData = require(Shared.PlayerData).server
 local DeskData = require(Shared.Utilities.DeskData)
+local EmployeeService = require(script.Parent.EmployeeService)
+local Items = require(Shared.Utilities.Items)
 local PartConfigs = require(Shared.Configs.Parts)
 local Rolling = require(Shared.Utilities.Rolling)
 local Store = require(Shared.Utilities.Store)
@@ -25,6 +27,11 @@ local SlotRollBurst = 4
 --> Not weak keyed: a weak table drops its entries while the player is still in the game, which
 --> would quietly hand the exploiter back an unlimited button. Cleared on the way out instead.
 local SlotRolls: { [Player]: { Tokens: number, At: number } } = {}
+
+--> Published on the Player so every client can draw what somebody is carrying, in the form
+--> Items.Carry writes, nil for empty hands. Attributes replicate on their own and reach a client
+--> that joins later, which an event would not.
+local CarryAttribute = "Carrying"
 
 local ItemService = {}
 
@@ -65,24 +72,54 @@ local function MatchKey(Raw: { [any]: any }?, Wanted: number): any?
 	return nil
 end
 
-local function Known(Item: any): boolean
-	return type(Item) == "table"
-		and type(Item.Component) == "string"
-		and type(Item.Variant) == "string"
-		and PartConfigs.BaseValues[Item.Component] ~= nil
-		and PartConfigs.Variants[Item.Variant] ~= nil
+--> Whatever is in hand, written to the player for everyone to read. Nil takes the attribute off
+--> rather than leaving an empty string for every client to parse.
+local function PublishCarry(Player: Player, Held: any)
+	local Value = Items.Carry(Held)
+
+	if Player:GetAttribute(CarryAttribute) ~= Value then
+		Player:SetAttribute(CarryAttribute, Value)
+	end
+end
+
+function ItemService:HandlePlayer(Player: Player)
+	task.spawn(function()
+		local Data = PlayerData.Service:waitForData(Player)
+
+		if not Data or Player.Parent ~= Players then
+			return
+		end
+
+		PublishCarry(Player, Data.Holding())
+
+		Data.Holding.Changed(function(Held: any)
+			PublishCarry(Player, Held)
+		end)
+	end)
 end
 
 function ItemService:Init()
+	for _, Player in Players:GetPlayers() do
+		self:HandlePlayer(Player)
+	end
+
+	Players.PlayerAdded:Connect(function(Player: Player)
+		self:HandlePlayer(Player)
+	end)
+
 	NetworkingServer.Items.PickUp.On(function(Player, Slot): Rolling.Result
 		local Data = PlayerData[Player]
 		assert(Data, `No loaded data for {Player.Name}`)
+
+		--> One thing at a time. Overwriting what was in hand would quietly lose it now that there
+		--> is somewhere to put it down.
+		assert(not Items.IsHeld(Data.Holding()), `{Player.Name} tried to pick up with full hands`)
 
 		local PadKey = MatchKey(Data.Pads(), Slot)
 		assert(PadKey ~= nil, `{Player.Name} tried to pick up empty pad {Slot}`)
 
 		local Item = Data.Pads[PadKey]()
-		assert(Known(Item), `{Player.Name} tried to pick up a part that is not a part`)
+		assert(Items.IsPart(Item), `{Player.Name} tried to pick up a part that is not a part`)
 
 		Data.Pads[PadKey](nil)
 
@@ -91,12 +128,20 @@ function ItemService:Init()
 		return { Component = Item.Component, Variant = Item.Variant }
 	end)
 
-	NetworkingServer.Items.Replace.On(function(Player, Target): Rolling.Result
+	--> Putting what is in hand onto one desk. A part is swapped onto its slot; an employee is sat
+	--> down, and only where nobody is sitting already, because a seated employee never comes off
+	--> a desk into the inventory and a swap would have to put them there.
+	NetworkingServer.Items.Replace.On(function(Player, Target): boolean
 		local Data = PlayerData[Player]
 		assert(Data, `No loaded data for {Player.Name}`)
 
 		local Item = Data.Holding()
-		assert(Known(Item), `{Player.Name} tried to place with empty hands`)
+		assert(Items.IsHeld(Item), `{Player.Name} tried to place with empty hands`)
+
+		--> A stolen employee is still the victim's until the thief has been seen inside their own
+		--> base. Every desk this can land on is in that base, so a legitimate placement has already
+		--> been secured by the time the prompt is held; a tagged one here skipped the walk.
+		assert(Item.StolenFrom == nil, `{Player.Name} tried to place somebody who is not yet theirs`)
 
 		local Desk = DeskData.Get(Data, Target.Floor, Target.Slot)
 		assert(Desk, `{Player.Name} has no desk at floor {Target.Floor} slot {Target.Slot}`)
@@ -104,13 +149,28 @@ function ItemService:Init()
 		local Components = Desk()
 		assert(type(Components) == "table", `{Player.Name}'s desk at {Target.Floor}/{Target.Slot} is empty`)
 
+		if Items.IsEmployee(Item) then
+			if Components.Employee ~= nil then
+				return false
+			end
+
+			--> the desk was checked above, so the only way this refuses is a write racing it
+			if not EmployeeService:SeatAt(Data, Target.Floor, Target.Slot, Item.Name, Item.Type) then
+				return false
+			end
+
+			Data.Holding({})
+
+			return true
+		end
+
 		local Swapped = table.clone(Components)
 		Swapped[Item.Component] = Item.Variant
 
 		Desk(Swapped)
 		Data.Holding({})
 
-		return { Component = Item.Component, Variant = Item.Variant }
+		return true
 	end)
 
 	--> Rolling one part of one desk in place, off the gift floating where that part will stand. Only
@@ -161,17 +221,54 @@ function ItemService:Init()
 		SlotRolls[Player] = nil
 	end)
 
-	--> Cancelling a pickup. The pad slot was already emptied when it was picked up, so letting go of
-	--> it drops the part for good rather than putting it back.
-	NetworkingServer.Items.Drop.On(function(Player): boolean
+	--> Putting what is in hand away instead of onto a desk. There is no dropping any more: a
+	--> thing picked up is either placed or stashed. A stolen part has to be secured first, which
+	--> is the server having seen the thief home, so nothing the client says gets a part off the
+	--> hook. The whole list is written back rather than inserted into, so what replicates is one
+	--> set the client cannot read half of.
+	NetworkingServer.Items.Stash.On(function(Player): boolean
 		local Data = PlayerData[Player]
 		assert(Data, `No loaded data for {Player.Name}`)
 
-		if not Known(Data.Holding()) then
+		local Item = Data.Holding()
+
+		if not Items.IsHeld(Item) or Item.StolenFrom ~= nil then
 			return false
 		end
 
+		local Inventory = table.clone(Data.Inventory())
+
+		if #Inventory >= Items.MaxInventory then
+			return false
+		end
+
+		table.insert(Inventory, Items.Strip(Item))
+
+		Data.Inventory(Inventory)
 		Data.Holding({})
+
+		return true
+	end)
+
+	--> Taking one thing out of the inventory into the hands, by its place in the list. The list
+	--> is the server's, so an index off the end or onto something unreadable is refused.
+	NetworkingServer.Items.Equip.On(function(Player, Index): boolean
+		local Data = PlayerData[Player]
+		assert(Data, `No loaded data for {Player.Name}`)
+
+		assert(not Items.IsHeld(Data.Holding()), `{Player.Name} tried to equip with full hands`)
+
+		local Inventory = table.clone(Data.Inventory())
+		local Item = Inventory[Index]
+
+		if not Items.IsHeld(Item) then
+			return false
+		end
+
+		table.remove(Inventory, Index)
+
+		Data.Inventory(Inventory)
+		Data.Holding(Items.Strip(Item))
 
 		return true
 	end)

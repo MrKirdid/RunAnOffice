@@ -23,8 +23,24 @@ type Desk = {
 
 local Config = {
 	PlayerData = {
-		Cash = 200,
+		--> Enough for the first desk at 250, a hire off the street and most of the second desk.
+		Cash = 1000,
 		Rebirths = 0,
+
+		--> Which step of the tutorial the player is on, 1 for the first, one past the last once it is
+		--> done. Only TutorialService writes it, off what the rest of the save says.
+		TutorialStage = 1,
+
+		--> How many employees have been hired and whether the base has been locked, counted only for
+		--> the tutorial, and whether the rigged first roll has been handed out. Written by
+		--> EmployeeService, BaseLockingService and RollingService.
+		TutorialHires = 0,
+		TutorialLocked = false,
+		TutorialRolled = false,
+
+		--> How many times the roll button has been pressed, ever. Written by RollingService, and
+		--> read by it for the lucky roll Configs.Tutorial names.
+		Rolls = 0,
 
 		Luck = 1, -- 1 is the plain table, 2 doubles the rarest chance
 
@@ -32,16 +48,42 @@ local Config = {
 
 		Pads = {} :: { [number]: { Component: string, Variant: string } },
 
-		Holding = {} :: { Component: string?, Variant: string? },
+		--> The one thing in hand: a part, as Component and Variant, picked up off a pad or taken
+		--> out of the inventory; or an employee, as Name and Type, taken out of the inventory or
+		--> lifted off somebody else's desk. The Stolen fields are set only by a theft and cleared
+		--> once the thief is seen inside their own base: while they are set the employee still
+		--> belongs to the desk they came off, which is where they go back to if the thief is caught.
+		Holding = {} :: {
+			Component: string?,
+			Variant: string?,
+			Name: string?,
+			Type: string?,
+			StolenFrom: number?,
+			StolenFloor: number?,
+			StolenSlot: number?,
+		},
 
+		--> Parts put away rather than placed, and employees bought and not yet seated, oldest
+		--> first. Each is one or the other. Nothing in here earns anything: a part only pays once
+		--> it is standing on a desk with somebody sat at it, and an employee only once sat down.
+		Inventory = {} :: { { Component: string?, Variant: string?, Name: string?, Type: string? } },
+
+		--> The first desk comes with the save, standing and wearing the three commonest parts, so
+		--> the tutorial has something to swap a better roll onto. Configs.Tutorial names the variant.
 		Floors = {
 			[1] = {
-				Desks = {} :: { [number]: Desk },
+				Desks = {
+					[1] = { Computer = "Mossy", Keyboard = "Mossy", Monitor = "Mossy" },
+				} :: { [number]: Desk },
 			},
 		} :: { [number]: { Desks: { Desk } } },
 
-		Gears = {},
-		EquippedGear = nil,
+		--> Gears bought from the gear shop, by key in Configs.Gears, kept for good; the ones in the
+		--> backpack right now; and how many may be in it at once, raised by the tree. Gears and
+		--> EquippedGears are written only by GearService, GearSlots only by an upgrade.
+		Gears = {} :: { [string]: boolean },
+		EquippedGears = {} :: { [string]: boolean },
+		GearSlots = 2,
 
 		Upgrades = {
 			RollsUnlocked = 1,
@@ -58,10 +100,11 @@ local Config = {
 			Cash = 1,
 			EmployeeSpeed = 1,
 			RollSpeed = 1,
+			WalkSpeed = 1,
 		},
 
-		--> The purple branch of the tree. Stealing is not in yet, so nothing reads this but the
-		--> upgrades that raise it.
+		--> The purple branch of the tree. Stealing is in, but nothing acts on this yet beyond the
+		--> upgrades that raise it; what it buys the base is still to come.
 		Defense = 0,
 
 		ItemShopStock = {},
@@ -101,7 +144,9 @@ return Dataservicetyped({
 	template = Config.PlayerData,
 	profileStoreDataPrefix = "data$",
 
-	profileStoreIndex = IsStudio and "dev1.01" or "prod1.01",
+	--> Bumped 2026-09-20 to wipe every save: the gear shop came in and then grew gear slots, with
+	--> the tutorial rebuilt around a starter desk just before. Old saves stay under the 1.04 keys.
+	profileStoreIndex = IsStudio and "dev1.05" or "prod1.05",
 
 	useMock = IsStudio and Config.UseMock,
 	viewedUserId = IsStudio and Config.ViewUserId,

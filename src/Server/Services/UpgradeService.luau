@@ -6,8 +6,15 @@ local NetworkingServer = require(Shared.Networking.networkingServer)
 local UpgradeDefinitions = require(Shared.Configs.UpgradeDefinitions)
 local UpgradeRules = require(Shared.Utilities.UpgradeRules)
 local PlayerData = require(Shared.PlayerData).server
+local TutorialConfigs = require(Shared.Configs.Tutorial)
 
 local UpgradeService = {}
+
+--> The tutorial's upgrade is on the house. Only while the save is on that step and only for a
+--> node the player has otherwise earned: the price is waived, the rules are not.
+function UpgradeService:IsFree(Data: any): boolean
+	return TutorialConfigs.IsOn(Data, "Upgrades")
+end
 
 function UpgradeService:GetOwned(Player: Player): UpgradeRules.Owned
 	local Data = PlayerData[Player]
@@ -65,7 +72,8 @@ function UpgradeService:Buy(Player: Player, Id: string): boolean
 		return false
 	end
 
-	local Allowed = UpgradeRules.CanBuy(self:GetOwned(Player), Id, Data.Cash())
+	local Free = self:IsFree(Data)
+	local Allowed = UpgradeRules.CanBuy(self:GetOwned(Player), Id, if Free then math.huge else Data.Cash())
 
 	if not Allowed then
 		--> Not a warning: a stale tree on a slow client presses a node somebody else's purchase
@@ -73,7 +81,7 @@ function UpgradeService:Buy(Player: Player, Id: string): boolean
 		return false
 	end
 
-	local Cost = UpgradeRules.GetCost(Id)
+	local Cost = if Free then 0 else UpgradeRules.GetCost(Id)
 
 	if Cost > 0 then
 		Data.Cash(function(Current: number)
