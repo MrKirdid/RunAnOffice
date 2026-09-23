@@ -1,3 +1,4 @@
+local GuiService = game:GetService("GuiService")
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -497,9 +498,14 @@ function UIController:_CopyClose(From: string, Gui: ScreenGui): GuiButton?
 	Copy.ZIndex = 100
 	Copy.Parent = Gui
 
-	--> the margin off the right edge is in the same unit as the one off the top, the height
+	--> The margin off the right edge is in the same unit as the one off the top, the height. A
+	--> screen drawn under Roblox's own top bar starts the margin below that bar, or the X sits in
+	--> the band Roblox keeps for its buttons.
 	local function Place()
-		Copy.Position = UDim2.new(1, -Gui.AbsoluteSize.Y * CopiedCloseMargin, CopiedCloseMargin, 0)
+		local Margin = Gui.AbsoluteSize.Y * CopiedCloseMargin
+		local Top = if Gui.IgnoreGuiInset then GuiService:GetGuiInset().Y else 0
+
+		Copy.Position = UDim2.new(1, -Margin, 0, Top + Margin)
 	end
 
 	Place()
