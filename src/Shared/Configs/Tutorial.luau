@@ -139,6 +139,14 @@ local Stages: { Stage } = {
 		end,
 	},
 	{
+		Name = "BuyGear",
+		Text = "Grab a free bat at the gear shop",
+		Detail = "Gears knock back thieves and slow down rivals. This first one is on the house",
+		Check = function(Data: any): boolean
+			return next(Data.Gears()) ~= nil
+		end,
+	},
+	{
 		Name = "Upgrades",
 		Text = "Open Upgrades and buy your first one",
 		Detail = "Upgrades boost everything you own. This first one is free",
@@ -155,6 +163,10 @@ local Tutorial = {
 	--> What the first roll puts on the first pad, whatever the dice said: about one in eight, which
 	--> is enough of a step up from the starter parts for the swap to mean something.
 	FirstRollVariant = "Tree",
+
+	--> The gear the BuyGear step hands out for nothing, by key in Configs.Gears: the cheapest, so a
+	--> free one is not worth more than the step is teaching.
+	FreeGear = "WoodenBat",
 
 	--> A few presses of the roll button, once the tutorial is over and the player is rolling on their
 	--> own, are rolled at many times their luck: not a guaranteed anything, just a press where the
@@ -200,6 +212,12 @@ end
 --> Whether a save is on the named step right now.
 function Tutorial.IsOn(Data: any, Name: string): boolean
 	return Data.TutorialStage() == Tutorial.IndexOf(Name)
+end
+
+--> Whether this gear costs nothing for this save: the free one, while the save is on its step.
+--> Read by both sides, so the shop's row and the server's charge agree.
+function Tutorial.IsFreeGear(Data: any, Key: string): boolean
+	return Key == Tutorial.FreeGear and Tutorial.IsOn(Data, "BuyGear")
 end
 
 return Tutorial

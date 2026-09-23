@@ -42,16 +42,19 @@ local SwingShake = 1.2
 local BombDrop = Vector3.new(0, -2.5, 0)
 local BombFuse = 2.5
 local BombRadius = 14
-local BombPower = 80
+local BombPower = 41
 
---> the tnt: thrown at the aim with this much speed and this much lift, then the bigger blast
+--> the tnt: thrown to the aim at about this speed across the ground, with this much lift when
+--> there is nothing to aim at, then the bigger blast
 local ThrowSpeed = 90
 local ThrowLift = 25
 local TNTFuse = 2
 local TNTRadius = 22
-local TNTPower = 125
+local TNTPower = 53
 
---> the blast's lift over its sideways push, so nobody is shoved along the floor, and the kick
+--> the blast's lift over its sideways push, so nobody is shoved along the floor, and the kick.
+--> A blast throws whoever is at its centre (2 * BlastLift * Power ^ 2 / gravity) studs and the
+--> edge a quarter of that: the tnt about 20 at the centre, the bomb about 12.
 local BlastLift = 0.7
 local BlastShake = 2
 
@@ -71,6 +74,7 @@ local SplatTween = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirecti
 
 --> the trap: how long it waits armed, how long it holds whoever steps on it, and the kick
 local TrapSize = Vector3.new(3, 0.5, 3)
+local TrapDrop = Vector3.new(0, -2.75, 0)
 local TrapLife = 60
 local TrapHold = 4
 local TrapShake = 1
@@ -102,6 +106,15 @@ local BonkColor = Color3.fromRGB(255, 240, 150)
 
 --> the slowed: tinted green for as long as the goo has them
 local GooTint = Color3.fromRGB(110, 230, 80)
+
+--> A throw is timed to come down on the aim: never quicker than this, and never longer, which is
+--> also what caps how far it goes. Aims further from the origin than any map is are thrown out.
+local MinThrowTime = 0.25
+local MaxThrowTime = 1.2
+local MaxCoordinate = 100_000
+
+--> How far under a thing dropped or splatted the floor is looked for, from where it was let go.
+local GroundReach = 60
 
 --> the parts the effects leave in the world, so a sweep could find them
 local EffectsFolderName = "GearEffects"
@@ -357,16 +370,75 @@ local function BuildPart(Name: string, Size: Vector3, Color: Color3): Part
 	return Part
 end
 
---> Something thrown from the hand towards the aim, with lift so it arcs. Nothing to aim at is a
---> lob straight ahead. The server keeps the part so the throw lands where it was thrown.
+--> Everything a cast for walls and floors should see through: every character, and whatever the
+--> gears have left lying about.
+local function WorldParams(): RaycastParams
+	local Ignore: { Instance } = { GetFolder() }
+
+	for _, Other in Players:GetPlayers() do
+		if Other.Character then
+			table.insert(Ignore, Other.Character)
+		end
+	end
+
+	local Params = RaycastParams.new()
+	Params.FilterType = Enum.RaycastFilterType.Exclude
+	Params.FilterDescendantsInstances = Ignore
+	Params.RespectCanCollide = true
+
+	return Params
+end
+
+--> The floor under a point, or nil with nothing solid within reach. Cast from a little above, so a
+--> point sunk just into the floor still finds it.
+local function GroundBelow(Position: Vector3): Vector3?
+	local Result = workspace:Raycast(Position + Vector3.new(0, 1, 0), Vector3.new(0, -GroundReach, 0), WorldParams())
+
+	return if Result then Result.Position else nil
+end
+
+--> The aim as sent, if it is a real point: the client can send anything, and a NaN or an infinity
+--> would turn into a velocity nobody could aim.
+local function CleanAim(Aim: Vector3?): Vector3?
+	if not Aim or Aim ~= Aim or Aim.Magnitude > MaxCoordinate then
+		return nil
+	end
+
+	return Aim
+end
+
+--> Something thrown from the hand so that it comes down on the aim: timed off how far away that is
+--> at about Speed across the ground, and lifted by exactly what gravity takes back over that time.
+--> An aim past MaxThrowTime of flight is brought in to that. Nothing to aim at is a lob straight
+--> ahead. The server keeps the part so the throw lands where it was thrown.
 local function Throw(Context: Context, Part: BasePart, Speed: number, Lift: number)
-	local Origin = Context.Root.Position + Context.Root.CFrame.LookVector * 2
-	local Towards = if Context.Aim then Context.Aim - Origin else Context.Root.CFrame.LookVector
-	local Direction = if Towards.Magnitude > 0.1 then Towards.Unit else Context.Root.CFrame.LookVector
+	local Forward = Context.Root.CFrame.LookVector
+	local Origin = Context.Root.Position + Forward * 2
+	local Aim = CleanAim(Context.Aim)
+	local Velocity = Forward * Speed + Vector3.new(0, Lift, 0)
+
+	if Aim then
+		local Reach = Speed * MaxThrowTime
+		local Offset = Aim - Origin
+
+		--> as far up or down as it may go across, so a point down a pit is not a throw at the floor
+		Offset = Vector3.new(Offset.X, math.clamp(Offset.Y, -Reach, Reach), Offset.Z)
+
+		local Flat = Vector3.new(Offset.X, 0, Offset.Z)
+		local Time = math.clamp(Flat.Magnitude / Speed, MinThrowTime, MaxThrowTime)
+
+		--> brought in along the line to it when it is further than the longest flight carries
+		if Flat.Magnitude > Reach then
+			Offset = Flat.Unit * Reach + Vector3.new(0, Offset.Y, 0)
+			Flat = Vector3.new(Offset.X, 0, Offset.Z)
+		end
+
+		Velocity = Flat / Time + Vector3.new(0, Offset.Y / Time + workspace.Gravity * Time / 2, 0)
+	end
 
 	Part.CanQuery = false
 	Part.Position = Origin
-	Part.AssemblyLinearVelocity = Direction * Speed + Vector3.new(0, Lift, 0)
+	Part.AssemblyLinearVelocity = Velocity
 	Part.AssemblyAngularVelocity = Vector3.new(Draw:NextNumber(-1, 1), Draw:NextNumber(-1, 1), Draw:NextNumber(-1, 1))
 		* TumbleSpeed
 	Part.Parent = GetFolder()
@@ -420,6 +492,11 @@ local function Swing(Power: number): Effect
 			local Flat = Vector3.new(Away.X, 0, Away.Z)
 
 			if Flat.Magnitude < 0.1 or Flat.Unit:Dot(Forward) < SwingCone then
+				continue
+			end
+
+			--> a wall between the two is a swing into the wall
+			if workspace:Raycast(Origin, Away, WorldParams()) then
 				continue
 			end
 
@@ -494,7 +571,11 @@ Effects.Bomb = function(Context: Context)
 	Bomb.Anchored = true
 	Bomb.CanCollide = false
 	Bomb.CanQuery = false
-	Bomb.CFrame = CFrame.new(Context.Root.Position + BombDrop) * Context.Root.CFrame.Rotation
+	--> sat on the floor under the player, or under their feet where they stand with none found
+	local Floor = GroundBelow(Context.Root.Position)
+	local At = if Floor then Floor + Vector3.new(0, Bomb.Size.Y / 2, 0) else Context.Root.Position + BombDrop
+
+	Bomb.CFrame = CFrame.new(At) * Context.Root.CFrame.Rotation
 	Bomb.Parent = GetFolder()
 
 	Fuse(Context.Player, Bomb, BombFuse, BombRadius, BombPower)
@@ -502,6 +583,18 @@ end
 
 Effects.TNT = function(Context: Context)
 	local Stick = BuildFromGear("TNT", Vector3.new(1.5, 2, 1.5), Color3.fromRGB(220, 50, 40))
+	local Stuck = false
+
+	--> It stops dead on the first solid thing it hits, so it goes off where it was thrown rather
+	--> than bouncing on from it. A player it hits is not something to stick to.
+	Stick.Touched:Connect(function(Hit: BasePart)
+		if Stuck or not Hit.CanCollide or GetToucher(Hit) or Hit:IsDescendantOf(GetFolder()) then
+			return
+		end
+
+		Stuck = true
+		Stick.Anchored = true
+	end)
 
 	Throw(Context, Stick, ThrowSpeed, ThrowLift)
 	Fuse(Context.Player, Stick, TNTFuse, TNTRadius, TNTPower)
@@ -572,15 +665,15 @@ Effects.Goo = function(Context: Context)
 			Kick(Other, GooShake)
 		end
 
-		--> the puddle lies where the ball is, on the ground under it
-		Land(Ball.Position - Vector3.new(0, Ball.Size.Y / 2, 0))
+		--> the puddle lies on the floor under where the ball hit, a wall or a player included
+		Land(GroundBelow(Ball.Position) or Ball.Position - Vector3.new(0, Ball.Size.Y / 2, 0))
 	end)
 
 	Throw(Context, Ball, GooSpeed, GooLift)
 
 	task.delay(GooFlight, function()
 		if Ball.Parent then
-			Land(Ball.Position)
+			Land(GroundBelow(Ball.Position) or Ball.Position)
 		end
 	end)
 end
@@ -589,7 +682,9 @@ end
 --> caught gets the count over their head.
 Effects.Trap = function(Context: Context)
 	local Plate = BuildPart("Trap", TrapSize, Color3.fromRGB(120, 120, 130))
-	Plate.Position = Context.Root.Position + Vector3.new(0, -2.75, 0)
+	local Floor = GroundBelow(Context.Root.Position)
+
+	Plate.Position = if Floor then Floor + Vector3.new(0, TrapSize.Y / 2, 0) else Context.Root.Position + TrapDrop
 	Plate.Anchored = true
 	Plate.CanCollide = false
 	Plate.CanQuery = false

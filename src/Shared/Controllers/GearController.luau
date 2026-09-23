@@ -8,6 +8,7 @@ local NetworkingClient = require(Shared.Networking.networkingClient)
 local PlayerData = require(Shared.PlayerData).client
 local ScreenShakeController = require(Shared.Controllers.ScreenShakeController)
 local SoundController = require(Shared.Controllers.SoundController)
+local TutorialConfigs = require(Shared.Configs.Tutorial)
 local TutorialController = require(Shared.Controllers.TutorialController)
 
 --> The gear shop's client side, for the shop screen to sit on: what is owned and equipped is read
@@ -50,10 +51,19 @@ function GearController:GetSlots(): (number, number)
 	return Count, PlayerData.GearSlots()
 end
 
-function GearController:CanAfford(Key: string): boolean
+--> What this gear costs this player right now: nothing for the tutorial's free one on its step.
+function GearController:GetPrice(Key: string): number
 	local Config = GearConfigs.List[Key]
 
-	return Config ~= nil and PlayerData.Cash() >= Config.Price
+	if not Config then
+		return math.huge
+	end
+
+	return if TutorialConfigs.IsFreeGear(PlayerData, Key) then 0 else Config.Price
+end
+
+function GearController:CanAfford(Key: string): boolean
+	return PlayerData.Cash() >= self:GetPrice(Key)
 end
 
 --> Turned down here for the reasons the player can see, so the bar can say why without a round

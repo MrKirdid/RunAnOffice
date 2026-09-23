@@ -110,7 +110,10 @@ local Config = {
 		ItemShopStock = {},
 		ItemShopLastUpdate = os.time() - 1,
 
-		LastOnline = os.time(),
+		--> os.time() the player was last seen in a server, stamped on the way out and every minute
+		--> while in, for OfflineEarningsService. 0 on a save that has never been stamped, which pays
+		--> nothing: a template default of os.time() would be the server's boot time instead.
+		LastSeen = 0,
 		TotalCashEarned = 0,
 
 		Gamepasses = {},

@@ -20,6 +20,7 @@ local PlayerData = require(Shared.PlayerData).client
 local Revenue = require(Shared.Utilities.Revenue)
 local Rolling = require(Shared.Utilities.Rolling)
 local ScreenShakeController = require(Shared.Controllers.ScreenShakeController)
+local Store = require(Shared.Utilities.Store)
 local TutorialConfigs = require(Shared.Configs.Tutorial)
 local TutorialController = require(Shared.Controllers.TutorialController)
 
@@ -728,10 +729,11 @@ end
 function EmployeeController:GetEarners(): { Earner }
 	local Earners: { Earner } = {}
 
-	--> What the tree has raised the plot's whole take by. The server floors the plot total once
-	--> rather than desk by desk, so these will not always add up to the amount that landed in the
-	--> balance: what is shown over a desk is that desk's own share, not a slice of the payment.
-	local Multiplier = PlayerData.Multipliers.Cash()
+	--> What the tree, the shop and the friends here have raised the plot's whole take by. The
+	--> server floors the plot total once rather than desk by desk, so these will not always add up
+	--> to the amount that landed in the balance: what is shown over a desk is that desk's own
+	--> share, not a slice of the payment.
+	local Multiplier = Store.IncomeMultiplier(PlayerData, Players.LocalPlayer)
 
 	for _, Seated in self.Seated do
 		local Desk = PlayerData.Floors[Seated.Floor].Desks[Seated.Slot]()

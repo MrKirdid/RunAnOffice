@@ -234,6 +234,12 @@ function PlotService:TeleportPlayerToFloor(Player: Player, Floor: number): boole
 		return false
 	end
 
+	--> A thief carrying somebody else's employee walks it home. Travel works from anywhere, the
+	--> hud's Home button included, so without this a steal would end in a teleport to safety.
+	if Data.Holding().StolenFrom ~= nil then
+		return false
+	end
+
 	local Now = os.clock()
 	local Last = self.LastTravel[Player]
 

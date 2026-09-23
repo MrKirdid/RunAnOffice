@@ -92,6 +92,8 @@ type Watch = {
 	MinY: number,
 	LastDescent: number,
 	GraceUntil: number,
+	--> while the server itself is throwing the character, see Excuse
+	ExcusedUntil: number,
 	Anchor: CFrame?,
 }
 
@@ -191,6 +193,20 @@ function AntiCheatService:Forgive(Player: Player, Target: CFrame)
 	Watch.Airborne = false
 end
 
+--> Looks away while the server moves a character by physics rather than by a pivot: a fling off
+--> a bat or a blast, with the root owned by the server for the whole of it. The watch follows the
+--> root along and comes back with a full bank, so the landing and the slide after it count as a
+--> walk. Nothing about where it lands is taken from the client; the server put it there.
+function AntiCheatService:Excuse(Player: Player, Seconds: number)
+	local Watch = self.Watches[Player]
+
+	if not Watch then
+		return
+	end
+
+	Watch.ExcusedUntil = math.max(Watch.ExcusedUntil, os.clock() + Seconds)
+end
+
 --> The one way the server should move a character. Anything that pivots a player without going
 --> through here is read as the player having done it themselves.
 function AntiCheatService:Teleport(Player: Player, Target: CFrame)
@@ -258,6 +274,15 @@ function AntiCheatService:Sample(Player: Player, Watch: Watch, Delta: number, No
 
 	if Now < Watch.GraceUntil then
 		Watch.LastPosition = Position
+		return
+	end
+
+	if Now < Watch.ExcusedUntil then
+		Watch.LastPosition = Position
+		Watch.LastMove = Now
+		Watch.LastDescent = Now
+		Watch.Airborne = false
+		Watch.Bank = GetAllowed(Humanoid) * BankSeconds
 		return
 	end
 
@@ -401,6 +426,7 @@ function AntiCheatService:Track(Player: Player, Character: Model)
 		MinY = 0,
 		LastDescent = Now,
 		GraceUntil = Now + GraceSeconds,
+		ExcusedUntil = 0,
 		Anchor = nil,
 	}
 

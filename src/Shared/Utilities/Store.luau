@@ -20,6 +20,13 @@ local SponsorAttribute = "ServerLuckSponsor"
 local LuckyRollerMultiplier = 2
 local VipCashMultiplier = 1.25
 
+--> Playing with friends: every friend in the same server adds a tenth to income, up to five of
+--> them. How many are here is counted by the server and published on the Player, so the hud reads
+--> the same number the payout does.
+local FriendsAttribute = "FriendsHere"
+local FriendStep = 0.1
+local MaxFriends = 5
+
 --> Pads go 1 to 9 through the tree, and the product stops at the same place.
 local MaxPads = 9
 
@@ -39,6 +46,10 @@ local Store = {
 	LuckAttribute = LuckAttribute,
 	ExpiresAttribute = ExpiresAttribute,
 	SponsorAttribute = SponsorAttribute,
+
+	FriendsAttribute = FriendsAttribute,
+	FriendStep = FriendStep,
+	MaxFriends = MaxFriends,
 
 	MaxPads = MaxPads,
 	StarterWindow = StarterWindow,
@@ -220,6 +231,24 @@ function Store.CashMultiplier(Data: any): number
 	end
 
 	return Multiplier
+end
+
+--> How many friends count towards the boost right now, capped.
+function Store.FriendsCounted(Player: Player): number
+	local Here = Player:GetAttribute(FriendsAttribute)
+
+	return if type(Here) == "number" then math.clamp(math.floor(Here), 0, MaxFriends) else 0
+end
+
+--> What playing with friends multiplies income by, 1 alone.
+function Store.FriendMultiplier(Player: Player): number
+	return 1 + Store.FriendsCounted(Player) * FriendStep
+end
+
+--> Everything a plot's rate is multiplied by: the tree, what was bought, and the friends here.
+--> The payout and every number shown for it read this one, so what is shown is what is paid.
+function Store.IncomeMultiplier(Data: any, Player: Player): number
+	return Data.Multipliers.Cash() * Store.CashMultiplier(Data) * Store.FriendMultiplier(Player)
 end
 
 return Store

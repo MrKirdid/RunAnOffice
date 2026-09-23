@@ -68,6 +68,7 @@ local LineGap = 0.02
 --> reads apart from the other two.
 local EquipText = "Equip"
 local EquippedText = "Equipped"
+local FreeText = "FREE"
 local EquippedTint = Color3.fromRGB(110, 170, 255)
 local UnownedRowTransparency = 0.5
 
@@ -240,7 +241,6 @@ end
 --> What each row says and wears right now, off the save, and the slot count in the title.
 function GearShopController:_Refresh()
 	for Key, Row in self.Rows do
-		local Config = GearConfigs.List[Key]
 		local Equipped = GearController:IsEquipped(Key)
 		local Owned = GearController:IsOwned(Key)
 
@@ -249,7 +249,9 @@ function GearShopController:_Refresh()
 		elseif Owned then
 			Row.Button.Text = EquipText
 		else
-			Row.Button.Text = Format.Cash(Config.Price)
+			local Price = GearController:GetPrice(Key)
+
+			Row.Button.Text = if Price == 0 then FreeText else Format.Cash(Price)
 		end
 
 		if Row.Art:IsA("ImageButton") then

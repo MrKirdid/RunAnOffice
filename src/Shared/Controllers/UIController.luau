@@ -32,6 +32,14 @@ local ToggleKey = Enum.KeyCode.H
 --> Anything in a screen named this closes it, so a screen with its own X needs no wiring here.
 local CloseName = "Close"
 
+--> A copied X sits in the top right corner: this tall as a share of the screen, square, and this
+--> far in from both edges, also as a share of the screen's height.
+local CopiedCloseSize = 0.09
+local CopiedCloseMargin = 0.03
+
+--> B on a gamepad backs out of whatever screen is open, which is the only way out a pad has.
+local BackKey = Enum.KeyCode.ButtonB
+
 export type Screen = {
 	Gui: string,
 
@@ -54,6 +62,11 @@ export type Screen = {
 	--> how long to leave the screen switched on after it closes. A screen animating itself out
 	--> takes longer than the panel pop does, and going dark underneath it cuts the fold short.
 	ShutTime: number?,
+
+	--> the screen whose X is copied into the top corner of this one when it has no X of its own.
+	--> The tree's only way out used to be the Exit hex in its middle, which testers never read as
+	--> a close button, and which pans off the screen with the rest of the tree.
+	CloseFrom: string?,
 }
 
 --> Every screen the HUD opens. Adding one here is the whole job: it gets the blur, the toggle and
@@ -74,8 +87,8 @@ local Defaults: { [string]: Screen } = {
 	Index = { Gui = "IndexGUI", Label = "Index", Close = "Frame.ImageLabel.ImageButton" },
 	Inventory = { Gui = "InventoryGUI", Label = "Inventory", Close = "Frame.ImageLabel.ImageButton" },
 
-	--> the tree closes on the Exit node in the middle of it, which UpgradeTreeController presses
-	Upgrades = { Gui = "UpgradeTree", Label = "Upgrades", Motion = false, ShutTime = 0.65 },
+	--> the tree also closes on the Exit node in the middle of it, which UpgradeTreeController presses
+	Upgrades = { Gui = "UpgradeTree", Label = "Upgrades", Motion = false, ShutTime = 0.65, CloseFrom = "Shop" },
 
 	--> no hud button: opened off the prompt on a seated employee, by EmployeeMenuController
 	Employee = { Gui = "EmployeesUI", Close = "Root.Panel.CloseButton" },
@@ -197,6 +210,12 @@ local function FindButton(Hud: ScreenGui, Screen: Screen): GuiButton?
 	end
 
 	return nil
+end
+
+--> The same wiring the screen buttons get, hover sound and icon forwarding, for a hud button that
+--> does something other than open a screen.
+function UIController:BindPress(Button: GuiButton, Press: () -> ())
+	BindPress(Button, Press)
 end
 
 function UIController:Register(Name: string, Screen: Screen)
@@ -457,9 +476,45 @@ function UIController:_BindMotion(Name: string, Gui: ScreenGui)
 	self.Motion[Name] = UIMotion.Attach(Inner, Root)
 end
 
+--> The X out of another screen, copied into the top right corner of this one. Sized off the
+--> screen's height rather than its own, since the one it came from was sized off a panel.
+function UIController:_CopyClose(From: string, Gui: ScreenGui): GuiButton?
+	local Source = self.Screens[From]
+	local SourceGui = self:GetGui(From)
+	local Original = if Source and Source.Close and SourceGui then Resolve(SourceGui, Source.Close) else nil
+
+	if not Original or not Original:IsA("GuiButton") then
+		warn(`[UI] no X on {From} to copy onto {Gui.Name}`)
+		return nil
+	end
+
+	local Copy = Original:Clone()
+	Copy.Name = CloseName
+	Copy.AnchorPoint = Vector2.new(1, 0)
+	Copy.SizeConstraint = Enum.SizeConstraint.RelativeYY
+	Copy.Size = UDim2.fromScale(CopiedCloseSize, CopiedCloseSize)
+	Copy.Visible = true
+	Copy.ZIndex = 100
+	Copy.Parent = Gui
+
+	--> the margin off the right edge is in the same unit as the one off the top, the height
+	local function Place()
+		Copy.Position = UDim2.new(1, -Gui.AbsoluteSize.Y * CopiedCloseMargin, CopiedCloseMargin, 0)
+	end
+
+	Place()
+	Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(Place)
+
+	return Copy
+end
+
 function UIController:_BindScreen(Name: string, Gui: ScreenGui)
 	local Screen = self.Screens[Name]
 	local Button = if Screen.Close then Resolve(Gui, Screen.Close) else Gui:FindFirstChild(CloseName, true)
+
+	if not Button and Screen.CloseFrom then
+		Button = self:_CopyClose(Screen.CloseFrom, Gui)
+	end
 
 	self:_BindMotion(Name, Gui)
 
@@ -492,6 +547,12 @@ function UIController:Init()
 	self:_BindHud(PlayerGui:WaitForChild(HudName) :: ScreenGui)
 
 	UserInputService.InputBegan:Connect(function(Input: InputObject, Processed: boolean)
+		--> read before the processed check: with the pad's gui selection on, B arrives processed
+		if Input.KeyCode == BackKey and self.Current then
+			self:Close(self.Current)
+			return
+		end
+
 		if Processed or Input.KeyCode ~= ToggleKey then
 			return
 		end

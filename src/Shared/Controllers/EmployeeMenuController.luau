@@ -15,6 +15,7 @@ local Format = require(Shared.Utilities.Format)
 local PlayerData = require(Shared.PlayerData).client
 local Revenue = require(Shared.Utilities.Revenue)
 local Rolling = require(Shared.Utilities.Rolling)
+local Store = require(Shared.Utilities.Store)
 local Tiers = require(Shared.Utilities.Tiers)
 
 --> What UIController files the screen under. It owns the blur, the pop and the X; this fills the
@@ -268,7 +269,7 @@ function EmployeeMenuController:Refresh()
 	local TierName, TierColor = Tiers.FromOdds(Odds)
 
 	local Desk = DeskData.Get(PlayerData, Seat.Floor, Seat.Slot)
-	local Rate = math.floor(Revenue.DeskRate(Desk and Desk()) * PlayerData.Multipliers.Cash())
+	local Rate = math.floor(Revenue.DeskRate(Desk and Desk()) * Store.IncomeMultiplier(PlayerData, Players.LocalPlayer))
 
 	local NameLabel = Panel:FindFirstChild("NameLabel") :: TextLabel?
 	local Badge = Panel:FindFirstChild("RarityBadge")

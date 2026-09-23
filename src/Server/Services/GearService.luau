@@ -9,6 +9,7 @@ local GearConfigs = require(Shared.Configs.Gears)
 local NetworkingServer = require(Shared.Networking.networkingServer)
 local PlayerData = require(Shared.PlayerData).server
 local StatusService = require(ServerScriptService.Server.Services.StatusService)
+local TutorialConfigs = require(Shared.Configs.Tutorial)
 
 --> The gear shop's server side: what is bought is written into the save, and what is equipped is
 --> cloned into the backpack, one Tool per equipped gear up to the save's slots, again after every
@@ -196,6 +197,9 @@ function GearService:Apply(Player: Player)
 		local Copy = self:GetTool(Key):Clone()
 		Copy:SetAttribute(GearAttribute, Key)
 
+		--> the Tools in the place keep whatever they were saved with, which is droppable by default
+		Copy.CanBeDropped = false
+
 		--> the config has the last word on how it sits in the hand and how big it is
 		if Config.Grip then
 			Copy.Grip = Config.Grip
@@ -250,16 +254,28 @@ function GearService:Buy(Player: Player, Key: string): boolean
 		return false
 	end
 
-	if Data.Cash() < Config.Price then
+	local Free = TutorialConfigs.IsFreeGear(Data, Key)
+	local Price = if Free then 0 else Config.Price
+
+	if Data.Cash() < Price then
 		return false
 	end
 
 	--> every reason to turn this down is out of the way, so the charge lands with the grant
 	Data.Cash(function(Current: number)
-		return math.max(Current - Config.Price, 0)
+		return math.max(Current - Price, 0)
 	end)
 
-	return self:Grant(Player, Key)
+	if not self:Grant(Player, Key) then
+		return false
+	end
+
+	--> the tutorial's gear goes straight into the backpack, so it is in hand the moment it is taken
+	if Free then
+		self:Equip(Player, Key, true)
+	end
+
+	return true
 end
 
 --> Puts an owned gear in the backpack, while there is a slot for it, or takes one out again.

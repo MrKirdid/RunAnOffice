@@ -69,7 +69,13 @@ end
 function RevenueService:GetRate(Player: Player): number
 	local Data = PlayerData[Player]
 
-	return if Data then Revenue.PlotRate(Data) * Data.Multipliers.Cash() * Store.CashMultiplier(Data) else 0
+	return if Data then Revenue.PlotRate(Data) * Store.IncomeMultiplier(Data, Player) else 0
+end
+
+--> The same rate without the friends boost: what the plot makes with nobody else around, which is
+--> what it was making while the player was away.
+function RevenueService:GetSoloRate(Data: any): number
+	return Revenue.PlotRate(Data) * Data.Multipliers.Cash() * Store.CashMultiplier(Data)
 end
 
 function RevenueService:Pay()
@@ -84,8 +90,8 @@ function RevenueService:Pay()
 		--> under a whole dollar is dropped. The cheapest desk pays 22 a second, so nothing that
 		--> earns at all ever floors to nothing.
 		--> The tree's multiplier is what the cash branch raises, 1 until one is bought, and what
-		--> the shop sold -- the ladder's rung, VIP -- is multiplied on top of it.
-		local Amount = math.floor(Revenue.PlotRate(Data) * Data.Multipliers.Cash() * Store.CashMultiplier(Data))
+		--> the shop sold -- the ladder's rung, VIP -- and the friends here are multiplied on top.
+		local Amount = math.floor(Revenue.PlotRate(Data) * Store.IncomeMultiplier(Data, Player))
 
 		Player:SetAttribute(RateAttribute, Amount)
 

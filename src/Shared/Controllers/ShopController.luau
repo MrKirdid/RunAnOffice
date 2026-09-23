@@ -928,7 +928,6 @@ end
 --> place and stay labels; a press on one is read straight off it and glides the list there.
 function ShopController:_BindRail()
 	local Panel = self.Panel :: Frame
-	local Scroll = self.Scroll :: ScrollingFrame
 
 	for _, Section in RailSections do
 		local Icon = Panel:FindFirstChild(Section)
@@ -941,35 +940,44 @@ function ShopController:_BindRail()
 		UIFx.Press(Icon)
 
 		BindPress(Icon, function()
-			local Row = self.Anchors[Section]
-
-			if not Row then
-				return
+			if self.Anchors[Section] then
+				SoundController:Play("Click")
 			end
 
-			SoundController:Play("Click")
-
-			--> a section headed by a title lands with the title at the top; one that is a single
-			--> row, like server luck, lands with that row in the middle of the view
-			local Window = Scroll.AbsoluteWindowSize.Y
-			local Limit = math.max(Scroll.AbsoluteCanvasSize.Y - Window, 0)
-			local Top = self:_CanvasTop(Row)
-			local IsHeader = string.sub(Row.Name, -#HeaderSuffix) == HeaderSuffix
-			local Wanted = if IsHeader then Top else Top - (Window - Row.AbsoluteSize.Y) / 2
-			local Goal = math.clamp(Wanted, 0, Limit)
-
-			self.ArrowHeld = true
-			self:_Aim(Section)
-
-			TweenService:Create(Scroll, ScrollTween, { CanvasPosition = Vector2.new(0, Goal) }):Play()
-
-			task.delay(ScrollTween.Time, function()
-				self.ArrowHeld = false
-			end)
+			self:JumpTo(Section)
 		end)
 	end
 
 	self:_PointArrow()
+end
+
+--> Glides the list to a section, one of RailSections, and points the arrow at its icon. For the
+--> rail, and for anything outside the shop that opens it on a section, like the + by the cash.
+function ShopController:JumpTo(Section: string)
+	local Row = self.Anchors[Section]
+	local Scroll = self.Scroll
+
+	if not Row or not Scroll then
+		return
+	end
+
+	--> a section headed by a title lands with the title at the top; one that is a single
+	--> row, like server luck, lands with that row in the middle of the view
+	local Window = Scroll.AbsoluteWindowSize.Y
+	local Limit = math.max(Scroll.AbsoluteCanvasSize.Y - Window, 0)
+	local Top = self:_CanvasTop(Row)
+	local IsHeader = string.sub(Row.Name, -#HeaderSuffix) == HeaderSuffix
+	local Wanted = if IsHeader then Top else Top - (Window - Row.AbsoluteSize.Y) / 2
+	local Goal = math.clamp(Wanted, 0, Limit)
+
+	self.ArrowHeld = true
+	self:_Aim(Section)
+
+	TweenService:Create(Scroll, ScrollTween, { CanvasPosition = Vector2.new(0, Goal) }):Play()
+
+	task.delay(ScrollTween.Time, function()
+		self.ArrowHeld = false
+	end)
 end
 
 --> Whether an entry is on the shelf at all right now.

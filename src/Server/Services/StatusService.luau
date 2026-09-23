@@ -1,5 +1,7 @@
 local Players = game:GetService("Players")
 
+local AntiCheatService = require(script.Parent.AntiCheatService)
+
 --> What the gears do to a player, all in one place: slowed, sped up, frozen, hidden or flung.
 --> Nothing here takes health. Speed is handed to MonetizationService as one attribute on the
 --> player, the product of every modifier running, so it can fold it into the walk speed it
@@ -224,6 +226,11 @@ function StatusService:Fling(Player: Player, Velocity: Vector3)
 	local Stamp = os.clock()
 
 	self.Flung[Player] = Stamp
+
+	--> The throw is the server's, well past any walk or jump the checks allow. They look away for
+	--> exactly as long as the server owns the root, so there is nothing for the client to fake
+	--> while they do: a longer excuse would hand a cheater who bombs their own feet a free teleport.
+	AntiCheatService:Excuse(Player, FlingTime)
 
 	Root:SetNetworkOwner(nil)
 	Humanoid.PlatformStand = true
