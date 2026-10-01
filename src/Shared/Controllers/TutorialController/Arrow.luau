@@ -35,6 +35,9 @@ local Arrow = {
 	Bob = nil :: Tween?,
 	Pulse = nil :: Tween?,
 
+	--> the slide to where the arrow is parking, held so a target that moves under it can cut it short
+	Moving = nil :: Tween?,
+
 	Target = nil :: PVInstance?,
 	Connections = {} :: { RBXScriptConnection },
 
@@ -102,8 +105,9 @@ function Arrow:_FadeIn()
 	TweenService:Create(Image, FadeTween, { ImageTransparency = 0 }):Play()
 end
 
---> The parked loop: bobbing over wherever the arrow was left.
-function Arrow:_Bob()
+--> The parked loop: bobbing over wherever the arrow was left. KeepPulse leaves the pulse running
+--> for a re-park that happens every frame, where starting it over would read as a flicker.
+function Arrow:_Bob(KeepPulse: boolean?)
 	local Image = self.Image
 
 	if not Image then
@@ -121,7 +125,9 @@ function Arrow:_Bob()
 	})
 	self.Bob:Play()
 
-	self:_Pulse(ParkedPulse)
+	if not KeepPulse then
+		self:_Pulse(ParkedPulse)
+	end
 end
 
 --> Brings the arrow out in the middle of the screen, pointing up, ready to be moved.
@@ -163,7 +169,12 @@ function Arrow:Move(Position: UDim2, Rotation: number?)
 		TweenService:Create(Image, TurnTween, { Rotation = Rotation }):Play()
 	end
 
+	if self.Moving then
+		self.Moving:Cancel()
+	end
+
 	local Move = TweenService:Create(Image, MoveTween, { Position = Position })
+	self.Moving = Move
 
 	Move.Completed:Once(function(State: Enum.PlaybackState)
 		if State ~= Enum.PlaybackState.Completed or self.Target then
@@ -188,12 +199,47 @@ function Arrow:Point(Holder: GuiObject)
 	end
 
 	local Container = Image.Parent :: GuiBase2d
-	local Center = Holder.AbsolutePosition + Holder.AbsoluteSize / 2
-	local Top = Holder.AbsolutePosition.Y - Image.AbsoluteSize.Y / 2 - Clearance
-	local Relative = (Vector2.new(Center.X, Top) - Container.AbsolutePosition) / Container.AbsoluteSize
+
+	local function Spot(): UDim2
+		local Center = Holder.AbsolutePosition + Holder.AbsoluteSize / 2
+		local Top = Holder.AbsolutePosition.Y - Image.AbsoluteSize.Y / 2 - Clearance
+		local Relative = (Vector2.new(Center.X, Top) - Container.AbsolutePosition) / Container.AbsoluteSize
+
+		return UDim2.fromScale(Relative.X, Relative.Y)
+	end
 
 	--> the image points down at rest, so no turn at all is pointing at the button
-	self:Move(UDim2.fromScale(Relative.X, Relative.Y), 0)
+	self:Move(Spot(), 0)
+
+	--> Measured once, the arrow parks wherever the button was at that instant -- and the hud can
+	--> still be sweeping in from the bottom edge when a step starts, which left the arrow under
+	--> the button instead of over it. So it follows: whenever the button or the screen moves or
+	--> resizes, the arrow is parked again over where the button is now.
+	local Generation = self.Generation
+
+	local function Follow()
+		if self.Generation ~= Generation or not Holder.Parent then
+			return
+		end
+
+		if self.Moving then
+			self.Moving:Cancel()
+			self.Moving = nil
+		end
+
+		Image.Position = Spot()
+		self:_Bob(true)
+	end
+
+	for _, Changed in
+		{
+			Holder:GetPropertyChangedSignal("AbsolutePosition"),
+			Holder:GetPropertyChangedSignal("AbsoluteSize"),
+			Container:GetPropertyChangedSignal("AbsoluteSize"),
+		}
+	do
+		table.insert(self.Connections, Changed:Connect(Follow))
+	end
 end
 
 --> Where the arrow goes and which way it turns for a part: over its box when the part is on the

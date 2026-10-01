@@ -87,9 +87,16 @@ local DENY_SHAKE = 350
 
 local GLOW_TRANSPARENCY = 1
 
---> what marks the node you could buy right now. it was 1, which switched the glow off entirely and
---> left an affordable node looking the same as one you cannot pay for yet
-local HIGHLIGHT_TRANSPARENCY = 0.4
+--> What marks the node you could buy right now: a glow that breathes between these two, so an
+--> affordable node is the one thing on the tree that moves. A flat glow at 0.4 read as a shade of
+--> the grey on the nodes you cannot pay for yet.
+local HIGHLIGHT_BRIGHT = 0.05
+local HIGHLIGHT_DIM = 0.5
+local HIGHLIGHT_PULSE = TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+
+--> the price says it in colour too: green you can pay it, red you cannot yet
+local AFFORDABLE_PRICE = Color3.fromRGB(120, 255, 110)
+local EXPENSIVE_PRICE = Color3.fromRGB(255, 95, 95)
 local MAX_NOTIFICATION_COUNT = 9
 
 local NUMBER_SYMBOLS = { "K", "M", "B", "T", "Q" }
@@ -161,10 +168,10 @@ local Colors: { [string]: Color } = {
 	},
 	locked = {
 		backgroundImage = ASSETS.background,
-		backgroundTint = Color3.fromRGB(105, 105, 115),
+		backgroundTint = Color3.fromRGB(78, 78, 88),
 		glow = BLACK,
-		icon = Color3.fromRGB(170, 170, 180),
-		text = Color3.fromRGB(200, 200, 205),
+		icon = Color3.fromRGB(130, 130, 140),
+		text = Color3.fromRGB(175, 175, 180),
 		stroke = BLACK,
 	},
 }
@@ -523,6 +530,7 @@ export type NodeData = {
 	_visible: boolean,
 	_alertVisible: boolean,
 	_highlighted: boolean,
+	_pulse: Tween?,
 	_hovering: boolean,
 	_pressing: boolean,
 	_connections: { RBXScriptConnection },
@@ -555,6 +563,7 @@ function NodeConstructor.new(config: Config, parentNode: Node?): Node
 		_visible = false,
 		_alertVisible = false,
 		_highlighted = false,
+		_pulse = nil,
 		_hovering = false,
 		_pressing = false,
 		_connections = {},
@@ -646,9 +655,22 @@ function NodeConstructor._applyColor(self: Node, color: Color)
 	instances.highlightGlow.ImageColor3 = color.glow
 	instances.icon.ImageColor3 = color.icon
 	instances.primaryText.TextColor3 = color.text
-	instances.priceText.TextColor3 = color.text
+	instances.priceText.TextColor3 = self:_priceColor(color)
 	instances.primaryTextStroke.Color = color.stroke
 	instances.priceTextStroke.Color = color.stroke
+end
+
+--> red while it cannot be paid for, green while it can, the palette's own text once it is owned
+function NodeConstructor._priceColor(self: Node, color: Color): Color3
+	if self._locked then
+		return EXPENSIVE_PRICE
+	end
+
+	if self._highlighted then
+		return AFFORDABLE_PRICE
+	end
+
+	return color.text
 end
 
 function NodeConstructor.setColor(self: Node, color: string | Color)
@@ -704,11 +726,28 @@ function NodeConstructor.setIsHighlighted(self: Node, isHighlighted: boolean)
 	end
 
 	self._highlighted = isHighlighted
+	self._instances.priceText.TextColor3 = self:_priceColor(if self._locked then Colors.locked else self._color)
+
+	if self._pulse then
+		self._pulse:Cancel()
+		self._pulse = nil
+	end
 
 	local highlightGlow = self._instances.highlightGlow
 	if isHighlighted then
-		highlightGlow.Visible = HIGHLIGHT_TRANSPARENCY < 1
-		playTween(highlightGlow, { ImageTransparency = HIGHLIGHT_TRANSPARENCY }, 0.25, Enum.EasingStyle.Quad)
+		highlightGlow.Visible = true
+
+		local riseTween = playTween(highlightGlow, { ImageTransparency = HIGHLIGHT_BRIGHT }, 0.25, Enum.EasingStyle.Quad)
+		riseTween.Completed:Once(function(playbackState: Enum.PlaybackState)
+			if playbackState ~= Enum.PlaybackState.Completed or not self._highlighted or self._pulse then
+				return
+			end
+
+			local pulse = TweenService:Create(highlightGlow, HIGHLIGHT_PULSE, { ImageTransparency = HIGHLIGHT_DIM })
+			self._pulse = pulse
+			pulse:Play()
+		end)
+
 		return
 	end
 
