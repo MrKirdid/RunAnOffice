@@ -40,8 +40,10 @@ local FloorsAttribute = "UnlockedFloors"
 --> round trip; if the root has not turned up by then, the move was refused or lost.
 local PendingSeconds = 3
 
---> Touched fires every frame a limb is on the pad; without this the menu reopens the moment it closes.
-local PadCooldown = 1
+--> Touched fires every frame a limb is on the pad, so the menu opens once per step onto it and not
+--> again until the player is this far off its edge; walking off also shuts it.
+local PadMargin = 3
+local PadPoll = 0.25
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -85,7 +87,8 @@ local FloorsController = {
 	--> rather than swept on the spot: a desk lands a moment before the things that go on it.
 	Dirty = false,
 
-	NextPad = 0,
+	--> the pad the player is stood on, while they are
+	OnPad = nil :: BasePart?,
 	Bound = {} :: { [BasePart]: boolean },
 	Watched = {} :: { [Player]: boolean },
 
@@ -648,15 +651,43 @@ function FloorsController:BindPads()
 				return
 			end
 
-			if os.clock() < self.NextPad then
+			if self.OnPad then
 				return
 			end
 
-			self.NextPad = os.clock() + PadCooldown
-
+			self.OnPad = Pad
 			self:Open()
+			self:_WatchLeave(Pad)
 		end)
 	end
+end
+
+--> Waits for the player to step off the pad, then shuts the menu and lets the pad open it again.
+function FloorsController:_WatchLeave(Pad: BasePart)
+	task.spawn(function()
+		local Reach = math.max(Pad.Size.X, Pad.Size.Z) / 2 + PadMargin
+
+		while true do
+			task.wait(PadPoll)
+
+			local Character = LocalPlayer.Character
+			local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+
+			if not Root or not Root:IsA("BasePart") or not Pad.Parent then
+				break
+			end
+
+			local Offset = (Root.Position - Pad.Position) * Vector3.new(1, 0, 1)
+			local Height = math.abs(Root.Position.Y - Pad.Position.Y)
+
+			if Offset.Magnitude > Reach or Height > Reach then
+				break
+			end
+		end
+
+		self.OnPad = nil
+		self:Close()
+	end)
 end
 
 function FloorsController:BindClose()
