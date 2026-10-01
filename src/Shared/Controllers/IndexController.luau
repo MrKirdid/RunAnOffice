@@ -4,18 +4,17 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Discoveries = require(Shared.Utilities.Discoveries)
-local Format = require(Shared.Utilities.Format)
+local InventoryController = require(Shared.Controllers.InventoryController)
 local PartConfigs = require(Shared.Configs.Parts)
 local PlayerData = require(Shared.PlayerData).client
 local SoundController = require(Shared.Controllers.SoundController)
-local Tiers = require(Shared.Utilities.Tiers)
 local UIController = require(Shared.Controllers.UIController)
 
 --> The Index in the place is a panel, a title, an X and three category buttons down the side, and
 --> nothing to put a part in. The grid is built here, inside the panel, one card per variant of the
---> picked component, commonest first: found ones in their tier's colour with what they pay, the
---> rest as a dark "???" that still says how rare it is, so the Index is also the list of what to
---> chase.
+--> picked component, commonest first, drawn as the inventory draws its cards: found ones whole,
+--> the rest as a dark shape that still says how rare it is, so the Index is also the list of what
+--> to chase.
 local GuiName = "IndexGUI"
 local ScreenName = "Index"
 local PanelPath = { "Frame", "ImageLabel" }
@@ -30,18 +29,13 @@ local Buttons = {
 }
 
 local TextFont = Font.new("rbxassetid://11598289817", Enum.FontWeight.Bold)
-local LockedColor = Color3.fromRGB(58, 60, 72)
-local LockedText = "???"
 local Unpicked = Color3.fromRGB(150, 150, 150)
 
 --> the grid sits under the title and the X, and keeps clear of the panel's rounded edge
 local ListPosition = UDim2.fromScale(0.5, 0.57)
 local ListSize = UDim2.fromScale(0.9, 0.74)
-local Columns = 4
+local Columns = 3
 local CellGap = 0.02
-
---> a card is a little taller than it is wide, so four lines of text sit in it without crowding
-local CardAspect = 0.85
 
 local IndexController = {
 	Gui = nil :: ScreenGui?,
@@ -76,7 +70,8 @@ end
 
 local Variants = Ordered()
 
-local function Label(Parent: Instance, Name: string, Text: string, Position: UDim2, Size: UDim2): TextLabel
+--> The found count beside the title.
+local function Label(Parent: Instance, Name: string, Position: UDim2, Size: UDim2): TextLabel
 	local Created = Instance.new("TextLabel")
 	Created.Name = Name
 	Created.BackgroundTransparency = 1
@@ -84,7 +79,6 @@ local function Label(Parent: Instance, Name: string, Text: string, Position: UDi
 	Created.Position = Position
 	Created.Size = Size
 	Created.FontFace = TextFont
-	Created.Text = Text
 	Created.TextScaled = true
 	Created.TextColor3 = Color3.new(1, 1, 1)
 
@@ -95,45 +89,6 @@ local function Label(Parent: Instance, Name: string, Text: string, Position: UDi
 	Created.Parent = Parent
 
 	return Created
-end
-
-local function Card(Parent: Instance, Component: string, Variant: string, Found: boolean, Order: number)
-	local TierName, TierColor, Odds = Tiers.FromVariant(Variant)
-	local Value = PartConfigs.BaseValues[Component].Value * PartConfigs.Variants[Variant].Value
-
-	local Frame = Instance.new("Frame")
-	Frame.Name = Variant
-	Frame.LayoutOrder = Order
-	Frame.BackgroundColor3 = if Found then TierColor else LockedColor
-
-	local Corner = Instance.new("UICorner")
-	Corner.CornerRadius = UDim.new(0.12, 0)
-	Corner.Parent = Frame
-
-	local Stroke = Instance.new("UIStroke")
-	Stroke.Thickness = 2
-	Stroke.Color = if Found then TierColor:Lerp(Color3.new(0, 0, 0), 0.45) else Color3.new(0, 0, 0)
-	Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	Stroke.Parent = Frame
-
-	Label(Frame, "Name", if Found then Variant else LockedText, UDim2.fromScale(0.5, 0.24), UDim2.fromScale(0.9, 0.3))
-	Label(Frame, "Tier", TierName, UDim2.fromScale(0.5, 0.52), UDim2.fromScale(0.85, 0.2))
-	Label(
-		Frame,
-		"Odds",
-		`1 in {Format.Short(math.round(Odds))}`,
-		UDim2.fromScale(0.5, 0.74),
-		UDim2.fromScale(0.85, 0.18)
-	)
-	Label(
-		Frame,
-		"Value",
-		if Found then `${Format.Short(Value)}x` else "",
-		UDim2.fromScale(0.5, 0.91),
-		UDim2.fromScale(0.7, 0.15)
-	)
-
-	Frame.Parent = Parent
 end
 
 function IndexController:GetGui(): ScreenGui?
@@ -195,7 +150,7 @@ function IndexController:_Build(Gui: ScreenGui): (ScrollingFrame?, TextLabel?)
 	local function Fit()
 		local Inner = List.AbsoluteSize.X - Padding.PaddingLeft.Offset - Padding.PaddingRight.Offset
 
-		Grid.CellSize = UDim2.new(Width, 0, 0, math.floor(Inner * Width / CardAspect))
+		Grid.CellSize = UDim2.new(Width, 0, 0, math.floor(Inner * Width / InventoryController.CellAspect))
 	end
 
 	List:GetPropertyChangedSignal("AbsoluteSize"):Connect(Fit)
@@ -203,7 +158,7 @@ function IndexController:_Build(Gui: ScreenGui): (ScrollingFrame?, TextLabel?)
 	List.Parent = Panel
 	Fit()
 
-	Count = Label(Panel, CountName, "", UDim2.fromScale(0.62, 0.083), UDim2.fromScale(0.4, 0.07))
+	Count = Label(Panel, CountName, UDim2.fromScale(0.62, 0.083), UDim2.fromScale(0.4, 0.07))
 
 	return List, Count
 end
@@ -241,7 +196,12 @@ function IndexController:Refresh()
 			Total += 1
 		end
 
-		Card(List, self.Component, Variant, Has, Order)
+		local Card = InventoryController:Card({ Component = self.Component, Variant = Variant }, Has)
+
+		if Card then
+			Card.LayoutOrder = Order
+			Card.Parent = List
+		end
 	end
 
 	Count.Text = `{self.Component}s found: {Total}/{#Variants}`

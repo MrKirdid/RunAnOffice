@@ -32,7 +32,7 @@ local EmptyName = "Empty"
 --> The grid, in fractions of the window. It starts under the title and stops short of the frame.
 local ListPosition = UDim2.fromScale(0.06, 0.2)
 local ListSize = UDim2.fromScale(0.88, 0.74)
-local Columns = 4
+local Columns = 3
 
 --> The card's own width to height, off its UIAspectRatioConstraint in the place.
 local CellAspect = 1.1742
@@ -42,10 +42,12 @@ local CellAspect = 1.1742
 local ColumnGap = 0.06
 local RowGap = 0.24
 
---> The render fills the middle of the card, behind the words: the odds line and the rarity line
---> are drawn over its edges rather than the picture being shrunk to fit between them.
-local RenderSize = UDim2.fromScale(0.7, 0.44)
-local RenderPosition = UDim2.fromScale(0.5, 0.49)
+--> The render fills the band between the odds line and the rarity line, behind the words. The
+--> renders carry a wide empty margin round the part, so the image is drawn this many times the
+--> band's size inside it and the band clips the margin off, leaving the part itself to fill it.
+local RenderSize = UDim2.fromScale(1, 0.5)
+local RenderPosition = UDim2.fromScale(0.5, 0.53)
+local RenderZoom = 1.9
 
 --> The odds line is cloned off the header and tucked under it, at the header's own left edge.
 local OddsPosition = UDim2.fromScale(0.114375174, 0.235)
@@ -55,6 +57,11 @@ local OddsSize = UDim2.fromScale(0.765777469, 0.095)
 local MultiplierColor = Color3.fromRGB(255, 215, 0)
 
 local EmptyText = "Nothing put away"
+
+--> how a card for something never found reads: a dark shape of it and no name or worth
+local LockedText = "???"
+local LockedRender = Color3.new(0, 0, 0)
+local LockedGlow = Color3.fromRGB(70, 70, 80)
 
 --> Layers inside a tile, bottom up. The card is drawn flat in the place, so they are set here.
 local GlowLayer = 1
@@ -74,6 +81,9 @@ type Stack = {
 
 local InventoryController = {
 	Template = nil :: Frame?,
+
+	--> the card's width to height, for the Index's grid which draws the same card
+	CellAspect = CellAspect,
 
 	--> One equip in flight at a time, or two clicks send two and the second always fails.
 	Equipping = false,
@@ -261,15 +271,18 @@ function InventoryController:Equip(Index: number)
 		end)
 end
 
---> One tile, off the card from the place: the render behind the words, the odds line under the
---> header, and a button over the lot.
-function InventoryController:_Tile(Order: number, Stack: Stack): Frame
-	local Template = self.Template :: Frame
-	local Entry = Stack.Entry
+--> One card, off the card from the place: the render behind the words and the odds line under
+--> the header. The Index draws its cards through here too, and a thing not found yet comes out as
+--> a dark shape with its odds and nothing else. The count over the card is the caller's to fill.
+function InventoryController:Card(Entry: Entry, Found: boolean): Frame?
+	local Template = self.Template
+
+	if not Template then
+		return nil
+	end
 
 	local Tile = Template:Clone()
 	Tile.Name = Items.Key(Entry)
-	Tile.LayoutOrder = Order
 	Tile.Visible = true
 
 	--> the grid sizes the cell, so the card's own aspect lock would only shrink it inside one
@@ -289,12 +302,12 @@ function InventoryController:_Tile(Order: number, Stack: Stack): Frame
 	local Amount = Tile:FindFirstChild("Amount") :: TextLabel?
 
 	if Glow then
-		Glow.ImageColor3 = TierColor
+		Glow.ImageColor3 = if Found then TierColor else LockedGlow
 		Glow.ZIndex = GlowLayer
 	end
 
 	if Header then
-		Header.Text = Items.Title(Entry)
+		Header.Text = if Found then Items.Title(Entry) else LockedText
 		Header.ZIndex = TextLayer
 
 		local OddsLine = Header:Clone()
@@ -312,7 +325,9 @@ function InventoryController:_Tile(Order: number, Stack: Stack): Frame
 		Rarity.ZIndex = TextLayer
 	end
 
-	if Cash then
+	if Cash and not Found then
+		Cash.Visible = false
+	elseif Cash then
 		local Value = FormatValue(Items.Value(Entry))
 
 		if Items.IsEmployee(Entry) then
@@ -333,20 +348,51 @@ function InventoryController:_Tile(Order: number, Stack: Stack): Frame
 	end
 
 	if Amount then
-		Amount.Text = `{Stack.Count}x`
+		Amount.Visible = false
 		Amount.ZIndex = TextLayer
 	end
 
-	local Render = Instance.new("ImageLabel")
+	local Render = Instance.new("Frame")
 	Render.Name = RenderName
 	Render.BackgroundTransparency = 1
 	Render.AnchorPoint = Vector2.new(0.5, 0.5)
 	Render.Size = RenderSize
 	Render.Position = RenderPosition
-	Render.Image = RenderOf(Entry)
-	Render.ScaleType = Enum.ScaleType.Fit
+	Render.ClipsDescendants = true
 	Render.ZIndex = RenderLayer
 	Render.Parent = Tile
+
+	local Image = Instance.new("ImageLabel")
+	Image.Name = "Image"
+	Image.BackgroundTransparency = 1
+	Image.AnchorPoint = Vector2.new(0.5, 0.5)
+	Image.Position = UDim2.fromScale(0.5, 0.5)
+	Image.Size = UDim2.fromScale(RenderZoom, RenderZoom)
+	Image.Image = RenderOf(Entry)
+	Image.ScaleType = Enum.ScaleType.Fit
+	Image.ImageColor3 = if Found then Color3.new(1, 1, 1) else LockedRender
+	Image.ZIndex = RenderLayer
+	Image.Parent = Render
+
+	return Tile
+end
+
+--> One inventory tile: the card, how many of it there are, and a button over the lot.
+function InventoryController:_Tile(Order: number, Stack: Stack): Frame?
+	local Tile = self:Card(Stack.Entry, true)
+
+	if not Tile then
+		return nil
+	end
+
+	Tile.LayoutOrder = Order
+
+	local Amount = Tile:FindFirstChild("Amount") :: TextLabel?
+
+	if Amount then
+		Amount.Text = `{Stack.Count}x`
+		Amount.Visible = true
+	end
 
 	local Press = Instance.new("TextButton")
 	Press.Name = PressName
@@ -388,7 +434,11 @@ function InventoryController:Refresh()
 	local Stacks = BuildStacks()
 
 	for Order, Stack in Stacks do
-		self:_Tile(Order, Stack).Parent = List
+		local Tile = self:_Tile(Order, Stack)
+
+		if Tile then
+			Tile.Parent = List
+		end
 	end
 
 	local Empty = Panel:FindFirstChild(EmptyName)
