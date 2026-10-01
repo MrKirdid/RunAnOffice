@@ -5,13 +5,18 @@ local Shared = ReplicatedStorage.Shared
 
 local PlayerData = require(Shared.PlayerData).server
 local RevenueService = require(script.Parent.RevenueService)
+local Store = require(Shared.Utilities.Store)
 
---> The office keeps earning while the player is away: on the way back in, every second since they
---> were last seen is paid at the rate the plot makes alone, up to three days of it. The clock is
---> the server's own, stamped into the save, so nothing the client says is involved.
+--> The office keeps earning while the player is away, at a tenth of the rate the plot makes alone,
+--> for up to a night of it: a night away comes back as about one desk, not as floors skipped. The
+--> clock is the server's own, stamped into the save, so nothing the client says is involved.
 
 --> the longest absence that is paid for, in seconds
-local MaxAway = 3 * 24 * 60 * 60
+local MaxAway = 8 * 60 * 60
+
+--> the share of the solo rate an absent second is paid at, and what VIP multiplies it by
+local OfflineShare = 0.1
+local VipOfflineMultiplier = 2
 
 --> How often the stamp is refreshed while the player is in, so a server that goes down without
 --> saying goodbye loses at most this much of the absence that follows.
@@ -41,7 +46,8 @@ function OfflineEarningsService:_Pay(Player: Player, Data: any)
 	end
 
 	local Away = math.clamp(Now - Last, 0, MaxAway)
-	local Amount = math.floor(RevenueService:GetSoloRate(Data) * Away)
+	local Share = OfflineShare * (if Store.Owns(Data, "VIP") then VipOfflineMultiplier else 1)
+	local Amount = math.floor(RevenueService:GetSoloRate(Data) * Share * Away)
 
 	if Amount <= 0 then
 		return

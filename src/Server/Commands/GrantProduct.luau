@@ -12,7 +12,7 @@ return {
 		{
 			Type = "string",
 			Name = "Key",
-			Description = "The product key: Sprint, VIP, Cash1, Pad, Skip1h, Luck2, Pro, Starter ...",
+			Description = "The product key: Sprint, VIP, Cash1, Pad, Skip15m, Luck2, Pro, Starter ...",
 		},
 	},
 }

@@ -36,8 +36,9 @@ local SprintMultiplier = 2.5
 --> the plot is wide and the street is a walk from it, and the stock speed made both a trudge.
 local StockMultiplier = 1.7
 
---> VIP's welcome: a day of income at the rate the plot makes when it is bought, and one pad.
-local VipBonusHours = 24
+--> VIP's welcome: four hours of income at the rate the plot makes when it is bought, the same as
+--> the 99 skip, and one pad.
+local VipBonusHours = 4
 local VipBonusKey = "VipBonus"
 
 --> The pack rule: a set fills a desk with nothing on it, and when there are none the next desk

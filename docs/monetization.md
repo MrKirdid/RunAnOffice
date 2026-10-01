@@ -10,7 +10,7 @@ nowhere in `src/`, and `Gamepasses = {}` in `PlayerData.luau` is the only hook t
   roughly 2.5M. Employees cost 100-1,000. That is the whole cash ramp, and it is finite.
 - **The endgame is the chase**: Premium parts at 1 in 769k, King Ceo at 1 in 15k. Pads
   (1 to 9) and luck (tree to ~30) are the only things that speed it up.
-- The item shop is not built. Offline earnings are planned, not built. No rebirths.
+- The item shop is not built. Offline earnings pay 10% of the solo rate for up to 8h (20% with VIP). No rebirths.
 
 So: cash products are early-to-mid game only and must not be big enough to end the cash
 ramp in minutes. Luck and pads are the long-tail levers. The chase is protected by never
@@ -58,7 +58,7 @@ Price points: 9 19 25 39 49 69 79 99 149 199 249 299 399 599 999 2,999 9,999.
 | Fast Spin     |  49 |   39 | Rolls resolve 2x faster. Comfort. |
 | Auto Roll     | 149 |  119 | Pads spin themselves while you are on your plot. The idle pass; rolls are free, so this sells time. |
 | Lucky Roller  | 199 |  159 | 2x luck, permanently. The flagship; *PRI.* |
-| VIP           | 399 |  319 | +25% income, one day of income on purchase, +1 pad, VIP chat tag and plot-sign title, the Golden Coil gear, a free 1h time skip claimable daily. |
+| VIP           | 399 |  319 | +25% income, four hours of income on purchase, 2x offline earnings, +1 pad, VIP chat tag and plot-sign title, the Golden Coil gear, a free 1h time skip claimable daily. |
 | Founder       | 9,999 | 7,999 | Name on the Founders wall on the map, Founder chat tag and plot-sign title. Nothing else. Not in the bundle. |
 
 **Gears** -- equipped one at a time.
@@ -131,15 +131,17 @@ banked instantly, and the button shows the actual cash number (rate x hours). Pr
 rate rather than as flat amounts so they never go stale as desk prices change. Prompted at
 the desk board when the next desk is out of reach.
 
-| Skip    | R$  | Plus |
-|---------|----:|-----:|
-| 1 hour  |  19 |   15 |
-| 8 hours |  49 |   39 |
-| 1 day   |  99 |   79 |
-| 3 days  | 249 |  199 |
+| Skip       | R$  | Plus |
+|------------|----:|-----:|
+| 15 minutes |  19 |   15 |
+| 1 hour     |  49 |   39 |
+| 4 hours    |  99 |   79 |
+| 12 hours   | 249 |  199 |
 
-Why no 7-day: with a ~2.5M plot, a week of mid-game income is the whole plot. Same problem
-as the 512x rung.
+Why so short: a solo playthrough is about seven hours of active income (desks on floor 3 cost
+7-12 minutes of income, floor 4 13-25). The old 1h/8h/1d/3d ladder let a floor-2 player buy
+the entire plot and tree with the 3-day skip. Now 15 minutes is about a desk, 4 hours most of
+a floor, and only the 12-hour skip bought on floor 3 or later reaches the end.
 
 ## Utility -- developer products
 
@@ -315,8 +317,8 @@ In build order. Every price shown anywhere comes from `GetProductInfo`; nothing 
 3. **Server luck banner.** Top strip: multiplier, countdown, sponsor name. Tap opens the
    Luck tab on the next tier. Also carries the free 5-minute Divine celebration.
 4. **Boost Luck button** on the roll UI. Opens the Luck tab.
-5. **Desk board upsell.** When cash is short, a second line: "Skip 1 hour, +$X", X being
-   the current rate times 3,600. Prompts the 1h skip; longer skips live in the tab.
+5. **Desk board upsell.** When cash is short, a second line: "Skip 15 minutes, +$X", X being
+   the current rate times 900. Prompts the 15m skip; longer skips live in the tab.
 6. **Slot reroll button** on a freshly rolled slot's card: "Reroll 9". Odds panel first.
 7. **Starter pack.** Popup on first join, then a HUD chip with the 24h countdown that
    reopens it. Gone at zero or on purchase, never back.

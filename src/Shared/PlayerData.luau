@@ -23,7 +23,7 @@ type Desk = {
 
 local Config = {
 	PlayerData = {
-		--> Enough for the first desk at 250, a hire off the street and most of the second desk.
+		--> Enough for a hire off the street and most of the next desk.
 		Cash = 1000,
 		Rebirths = 0,
 
@@ -44,7 +44,7 @@ local Config = {
 
 		Luck = 1, -- 1 is the plain table, 2 doubles the rarest chance
 
-		RerollPads = 9,
+		RerollPads = 1,
 
 		Pads = {} :: { [number]: { Component: string, Variant: string } },
 
