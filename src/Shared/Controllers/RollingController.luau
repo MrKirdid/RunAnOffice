@@ -504,10 +504,9 @@ function RollingService:Start()
 
 		SoundController:Play("Press")
 
-		local Data = self:RollSlots()
+		self:RollSlots()
 
 		Prompt.Enabled = true
-		print(Data)
 	end)
 
 	--> Auto Roll presses the button for the player while they stand on their own plot. Paced by

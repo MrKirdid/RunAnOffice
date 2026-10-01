@@ -10,7 +10,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Format = require(Shared.Utilities.Format)
 local Fusion = require(Shared.Packages.Fusion)
 local NetworkingClient = require(Shared.Networking.networkingClient)
+local PlayerData = require(Shared.PlayerData).client
 local SoundController = require(Shared.Controllers.SoundController)
+local Store = require(Shared.Utilities.Store)
 local UIMotion = require(Shared.Utilities.UIMotion)
 
 local Scope = Fusion.scoped(Fusion)
@@ -36,6 +38,9 @@ local BurstTime = 1.1
 local BurstReach = 0.55
 
 local Spread = Random.new()
+
+--> the product that adds a roll pad, which stops selling once every pad is out
+local PadKey = "Pad"
 
 export type Offer = {
 	Key: string,
@@ -250,6 +255,14 @@ function PurchaseController:Confirm()
 	local Offer = self.Offer
 
 	if not Offer then
+		return
+	end
+
+	--> Roblox takes the Robux before the server hears about it, so a pad past the last one has to
+	--> be stopped here: the grant would cap it and the player would have paid for nothing.
+	if Offer.Key == PadKey and PlayerData.RerollPads() >= Store.MaxPads then
+		SoundController:Play("Error")
+		self:Close()
 		return
 	end
 

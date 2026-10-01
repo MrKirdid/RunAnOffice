@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
+local Store = require(Shared.Utilities.Store)
 local Upgrades = require(Shared.Configs.Upgrades)
 
 export type Context = {
@@ -31,8 +32,9 @@ export type Definition = {
 	OnPurchase: (Context) -> (),
 }
 
---> Roll slots are 0-16 over the wire, so seventeen pads is the ceiling however many are bought.
-local MaxPads = 17
+--> The plot has nine pads, and a roll past them lands on nothing the client can draw. The tree and
+--> the store share the one ceiling, so a pad bought either way is one that shows up.
+local MaxPads = Store.MaxPads
 
 local function AddLuck(Amount: number)
 	return function(Context: Context)
