@@ -16,6 +16,7 @@ local PlotContainer = require(workspace.PlotContainer)
 --> Published on the Player rather than sent over the wire. Attributes replicate to everyone on
 --> their own, which is what lets a client hide the floors somebody else has not bought yet.
 local FloorsAttribute = "UnlockedFloors"
+local PadsAttribute = "RollPads"
 
 --> How far above a marker a player is dropped, arriving at the plot or at one of its floors alike.
 local DropHeight = 5
@@ -103,6 +104,22 @@ local function PublishFloors(Player: Player)
 	--> every time somebody bought a desk.
 	if Player:GetAttribute(FloorsAttribute) ~= Value then
 		Player:SetAttribute(FloorsAttribute, Value)
+	end
+end
+
+--> How many roll pads the player has, so every client can show the right ones on their plot and
+--> not just on its own.
+local function PublishPads(Player: Player)
+	local Data = PlayerData[Player]
+
+	if not Data then
+		return
+	end
+
+	local Value = Data.RerollPads()
+
+	if Player:GetAttribute(PadsAttribute) ~= Value then
+		Player:SetAttribute(PadsAttribute, Value)
 	end
 end
 
@@ -286,11 +303,13 @@ function PlotService:Init()
 
 			self:RefreshFloors(Player, self:GetPlot(Player))
 			PublishFloors(Player)
+			PublishPads(Player)
 
 			--> Bound to the root, which fires for anything underneath it, and re-reads the data
 			--> every time rather than trusting the value it was handed.
 			Data.Changed(function()
 				PublishFloors(Player)
+				PublishPads(Player)
 				self:RefreshFloors(Player, self:GetPlot(Player))
 			end)
 		end)

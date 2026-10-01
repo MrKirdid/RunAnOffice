@@ -6,6 +6,8 @@ local Shared = ReplicatedStorage.Shared
 
 local Effects = require(ServerScriptService.Server.Gears.Effects)
 local GearConfigs = require(Shared.Configs.Gears)
+local ItemService = require(ServerScriptService.Server.Services.ItemService)
+local Items = require(Shared.Utilities.Items)
 local NetworkingServer = require(Shared.Networking.networkingServer)
 local PlayerData = require(Shared.PlayerData).server
 local StatusService = require(ServerScriptService.Server.Services.StatusService)
@@ -214,11 +216,26 @@ function GearService:Apply(Player: Player)
 end
 
 --> A coil is faster only while it is out: the tool moving into the character is it being drawn,
---> and moving out is it being put away.
+--> and moving out is it being put away. Drawing one with something carried stashes what is
+--> carried; a stolen employee not yet home cannot be stashed, so the gear goes back instead.
 function GearService:_WatchCharacter(Player: Player, Character: Model)
 	Character.ChildAdded:Connect(function(Child: Instance)
 		local Key = Child:IsA("Tool") and Child:GetAttribute(GearAttribute)
 		local Config = if type(Key) == "string" then GearConfigs.List[Key] else nil
+		local Data = PlayerData[Player]
+
+		if Config and Data and Items.IsHeld(Data.Holding()) and not ItemService:Stash(Player) then
+			--> deferred: a tool cannot be moved again in the same step it arrived
+			task.defer(function()
+				local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+
+				if Humanoid and Child.Parent == Character then
+					Humanoid:UnequipTools()
+				end
+			end)
+
+			return
+		end
 
 		if Config and Config.Speed then
 			StatusService:Set(Player, PassiveName, 1 + Config.Speed)

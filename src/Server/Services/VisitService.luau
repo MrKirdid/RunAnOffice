@@ -11,11 +11,11 @@ local PlotBounds = require(Shared.Utilities.PlotBounds)
 local PlotService = require(script.Parent.PlotService)
 local Signal = require(Shared.Packages.Fastsignal)
 
---> Somebody else's desks are only ever drawn on a client standing inside that base. What is sent is
---> decided here, off where the server sees each character, and never off anything the client says
---> about where it is: walking in gets you the desks and whoever is sat at them, walking out takes
---> them away, and while you are in, every change to one of them is pushed as it happens. Nothing
---> about the roll pads goes out at all, and nothing goes to anyone standing in the street.
+--> Everybody's desks and whoever is sat at them go to everybody else, so a base can be looked at
+--> from the street: the whole base when its owner's save loads or a player joins, and every change
+--> to a desk as it happens. Which base a player is stood in is decided here, off where the server
+--> sees each character and never off anything the client says, and only that one can be stolen
+--> from: walking in is told with Entered, walking out with Left.
 
 --> How often every character is checked against every base.
 local SweepInterval = 0.2
@@ -129,16 +129,10 @@ function VisitService:Snapshot(Owner: Player): { Desk }
 	return Desks
 end
 
---> One desk of one base, to everyone standing in it. Read fresh off the save rather than off what
+--> One desk of one base, to everyone but its owner. Read fresh off the save rather than off what
 --> the callback was handed: a floor being taken away fires its desks with stale values, and what
 --> matters is only what is standing there now.
 function VisitService:Push(Owner: Player, Floor: number, Slot: number)
-	local Visitors = self.Visitors[Owner]
-
-	if not Visitors or next(Visitors) == nil then
-		return
-	end
-
 	local Data = PlayerData[Owner]
 
 	if not Data then
@@ -147,13 +141,8 @@ function VisitService:Push(Owner: Player, Floor: number, Slot: number)
 
 	local Desk = DeskData.Get(Data, Floor, Slot)
 	local Components = Desk and Desk()
-	local List = {}
 
-	for Visitor in Visitors do
-		table.insert(List, Visitor)
-	end
-
-	NetworkingServer.Visiting.DeskChanged.FireList(List, {
+	NetworkingServer.Visiting.DeskChanged.FireExcept(Owner, {
 		Owner = Owner,
 		Desk = Summarise(Floor, Slot, Components),
 		Removed = type(Components) ~= "table",
@@ -260,22 +249,25 @@ function VisitService:WatchOwner(Owner: Player)
 		end
 	end)
 
-	--> The plot is handed out before the save arrives, so anyone already standing in it was sent
-	--> an empty base. Nothing above fires for desks that were in the save all along; they are
-	--> sent again now, whole.
-	local Visitors = self.Visitors[Owner]
+	--> Nothing above fires for desks that were in the save all along, so the whole base goes out
+	--> now, to everyone already here.
+	NetworkingServer.Visiting.Base.FireExcept(Owner, {
+		Owner = Owner,
+		Desks = self:Snapshot(Owner),
+	})
+end
 
-	if Visitors then
-		for Visitor in Visitors do
-			NetworkingServer.Visiting.Entered.Fire(Visitor, {
+function VisitService:HandlePlayer(Player: Player)
+	--> every base already loaded, for the newcomer; a base still loading is sent by its WatchOwner
+	for _, Owner in Players:GetPlayers() do
+		if Owner ~= Player and PlayerData[Owner] then
+			NetworkingServer.Visiting.Base.Fire(Player, {
 				Owner = Owner,
 				Desks = self:Snapshot(Owner),
 			})
 		end
 	end
-end
 
-function VisitService:HandlePlayer(Player: Player)
 	task.spawn(function()
 		self:WatchOwner(Player)
 	end)

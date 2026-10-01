@@ -46,6 +46,12 @@ function StashController:Refresh()
 
 	UIController:SetHudCarrying(Carrying)
 
+	--> emptied by the server rather than by the X, which is a gear being drawn: the model in hand
+	--> goes with it
+	if not Carrying then
+		CarryController:Clear()
+	end
+
 	local Gui = self:GetGui()
 
 	if not Gui then

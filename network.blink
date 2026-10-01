@@ -128,7 +128,7 @@ scope Visiting {
 	}
 
 	-- every desk standing in a base, sent to a player the moment the server sees them walk into
-	-- it. Nothing about anyone's base is sent to anyone standing outside it.
+	-- it, which is what lets them steal there.
 	event Entered {
 		From: Server,
 		Type: Reliable,
@@ -139,7 +139,7 @@ scope Visiting {
 		}
 	}
 
-	-- one desk of the base being stood in changing under the visitor: a part rolled, stolen or put
+	-- one desk of a base changing, sent to everyone but its owner: a part rolled, stolen or put
 	-- back, or the desk itself going. Removed means the desk is gone and Desk carries only where it
 	-- stood.
 	event DeskChanged {
@@ -159,6 +159,19 @@ scope Visiting {
 		Type: Reliable,
 		Call: SingleAsync,
 		Data: Player
+	}
+
+	-- every desk in somebody's base, sent to everyone else so a base can be seen from the street:
+	-- to the whole server once the owner's save loads, and to a player joining for every base
+	-- already standing. Entered still says which base the player is stood in.
+	event Base {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: struct {
+			Owner: Player,
+			Desks: Desk[0..256]
+		}
 	}
 }
 

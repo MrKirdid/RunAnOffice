@@ -562,7 +562,7 @@ function EmployeeController:BuildSeated(
 	Label: string,
 	Seat: CFrame,
 	Parent: Instance
-): (Model, BasePart, BasePart)
+): (Model, BasePart, BasePart, AnimationTrack?, Sound?)
 	local Model, Root = BuildModel(Type, Label)
 
 	PlaceRoot(Model, Root, Seat)

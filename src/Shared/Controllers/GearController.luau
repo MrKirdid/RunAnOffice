@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local GearConfigs = require(Shared.Configs.Gears)
+local Items = require(Shared.Utilities.Items)
 local NetworkingClient = require(Shared.Networking.networkingClient)
 local PlayerData = require(Shared.PlayerData).client
 local ScreenShakeController = require(Shared.Controllers.ScreenShakeController)
@@ -20,6 +21,9 @@ local GearAttribute = "Gear"
 
 --> what the bar says when a gear will not go in because the backpack is full
 local FullText = "All gear slots are full"
+
+--> what it says when a gear is drawn with a stolen employee still in hand, which the server puts back
+local StolenText = "Get them home before pulling out a gear"
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -130,6 +134,15 @@ function GearController:_Wire(Tool: Tool)
 	end
 
 	self.Wired[Tool] = true
+
+	Tool.Equipped:Connect(function()
+		local Held = PlayerData.Holding()
+
+		if Items.IsHeld(Held) and Held.StolenFrom ~= nil then
+			SoundController:Play("Error")
+			TutorialController:Notify(StolenText)
+		end
+	end)
 
 	Tool.Activated:Connect(function()
 		local Mouse = LocalPlayer:GetMouse()

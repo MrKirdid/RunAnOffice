@@ -176,8 +176,11 @@ local function GetSeatTarget(Plot: Model, Seat: Seat): Vector3?
 end
 
 --> Every bought employee routes through the plot's own waypoint before its seat, so they all
---> enter the building the same way instead of cutting whatever line is shortest.
-local function GetSeatPath(Player: Player, Seat: Seat): { Vector3 }?
+--> enter the building the same way instead of cutting whatever line is shortest. Bought off the
+--> road to one side, the line to the door runs through the board, the bin and the buttons in the
+--> yard, so they first walk along the road to straight in front of the door and turn in there:
+--> the waypoint, slid in the plot's own space back to the depth the employee is already at.
+local function GetSeatPath(Player: Player, Seat: Seat, From: Vector3): { Vector3 }?
 	local Plot = PlotService:GetPlot(Player)
 	local Target = Plot and GetSeatTarget(Plot, Seat)
 
@@ -188,11 +191,16 @@ local function GetSeatPath(Player: Player, Seat: Seat): { Vector3 }?
 	local Positions = Plot:FindFirstChild("Positions")
 	local Waypoint = Positions and Positions:FindFirstChild(WaypointName)
 
-	if Waypoint then
-		return { (Waypoint :: BasePart).Position, Target }
+	if not Waypoint then
+		return { Target }
 	end
 
-	return { Target }
+	local Door = (Waypoint :: BasePart).Position
+	local Pivot = Plot:GetPivot()
+	local Local = Pivot:PointToObjectSpace(Door)
+	local Front = Pivot:PointToWorldSpace(Vector3.new(Local.X, Local.Y, Pivot:PointToObjectSpace(From).Z))
+
+	return { Front, Door, Target }
 end
 
 --> Seats already promised to an employee on its way over, which are not free to promise again.
@@ -411,7 +419,7 @@ function EmployeeService:Buy(Player: Player, UID: number): boolean
 	end
 
 	local Seat: Seat = { Floor = Floor, Slot = Slot }
-	local Path = GetSeatPath(Player, Seat)
+	local Path = GetSeatPath(Player, Seat, Employee.Position)
 
 	if not Path then
 		return false

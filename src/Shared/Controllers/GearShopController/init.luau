@@ -8,12 +8,13 @@ local Format = require(Shared.Utilities.Format)
 local GearConfigs = require(Shared.Configs.Gears)
 local GearController = require(Shared.Controllers.GearController)
 local PlayerData = require(Shared.PlayerData).client
+local PlotController = require(Shared.Controllers.PlotController)
 local UIController = require(Shared.Controllers.UIController)
 local UIFx = require(Shared.Utilities.UIFx)
 
 --> The gear shop on the screen: GearsUI, built in the place, with one Slot row cloned per gear off
---> the template row it ships with. It opens on its own when the player walks up to the shop model
---> on any plot and shuts again when they walk off, and goes through UIController like every other
+--> the template row it ships with. It opens off a prompt on the shopkeeper of the player's own plot
+--> (other plots' shopkeepers get none) and shuts when they walk off, and goes through UIController like every other
 --> screen so it gets the blur, the pop and the X for free. Buying and equipping go through
 --> GearController, which asks the server.
 
@@ -27,10 +28,12 @@ local TitlePath = "MainBackground.MainBackground.Level.TitleName"
 local SlotName = "Slot"
 local TitleText = "Gear Shop"
 
---> where the shop stands on a plot, and how close the player has to be to it
-local ContainerName = "PlotContainer"
+--> who sells on a plot, how close the prompt asks you to be, and how far walking off shuts it
 local ShopPath = { "Fcts", "Shop" }
-local OpenRange = 14
+local KeeperName = "Shopkeeper"
+local PromptName = "GearShopPrompt"
+local PromptRange = 10
+local CloseRange = 18
 
 --> how often the distance is looked at
 local Poll = 0.2
@@ -100,8 +103,8 @@ local GearShopController = {
 	--> each one's own speeds and offsets
 	Motions = {} :: { [string]: Motion },
 
-	--> whether the shop was opened by walking up, so walking off is what closes it
-	Near = false,
+	--> the shopkeeper the prompt is on, so a rebuilt plot gets a new one
+	Keeper = nil :: BasePart?,
 }
 
 local function Resolve(Root: Instance, Path: string): Instance?
@@ -397,33 +400,46 @@ function GearShopController:_Bind(Gui: ScreenGui)
 	self:_Refresh()
 end
 
---> The shop model nearest the character, on whichever plot, and how far it is.
-local function NearestShop(): number
-	local Character = Players.LocalPlayer.Character
-	local Root = Character and Character:FindFirstChild("HumanoidRootPart")
-	local Container = workspace:FindFirstChild(ContainerName)
+--> The shopkeeper on the player's own plot, the one the prompt and the tutorial's beam go to.
+function GearShopController:GetKeeper(): BasePart?
+	local _, Plot = PlotController:GetPlot(Players.LocalPlayer)
+	local Shop = Plot and Walk(Plot, ShopPath)
+	local Keeper = Shop and Shop:FindFirstChild(KeeperName)
 
-	if not Root or not Root:IsA("BasePart") or not Container then
-		return math.huge
-	end
-
-	local Best = math.huge
-
-	for _, Plot in Container:GetChildren() do
-		local Shop = Walk(Plot, ShopPath)
-
-		if not Shop or not Shop:IsA("PVInstance") then
-			continue
-		end
-
-		local Distance = (Shop:GetPivot().Position - Root.Position).Magnitude
-
-		if Distance < Best then
-			Best = Distance
+	--> the rig was saved without a name, so whichever model in the shop has a humanoid is them
+	if Shop and not Keeper then
+		for _, Child in Shop:GetChildren() do
+			if Child:IsA("Model") and Child:FindFirstChildOfClass("Humanoid") then
+				Keeper = Child
+				break
+			end
 		end
 	end
 
-	return Best
+	local Root = Keeper and Keeper:FindFirstChild("HumanoidRootPart")
+
+	return if Root and Root:IsA("BasePart") then Root else nil
+end
+
+function GearShopController:_Prompt(Keeper: BasePart)
+	if Keeper:FindFirstChild(PromptName) then
+		return
+	end
+
+	local Prompt = Instance.new("ProximityPrompt")
+	Prompt.Name = PromptName
+	Prompt.ActionText = "Open Gear Shop"
+	Prompt.ObjectText = "Shopkeeper"
+	Prompt.KeyboardKeyCode = Enum.KeyCode.E
+	Prompt.MaxActivationDistance = PromptRange
+	Prompt.RequiresLineOfSight = false
+	Prompt.HoldDuration = 0
+
+	Prompt.Triggered:Connect(function()
+		UIController:Open(ScreenName)
+	end)
+
+	Prompt.Parent = Keeper
 end
 
 function GearShopController:Init()
@@ -456,19 +472,26 @@ function GearShopController:Init()
 end
 
 function GearShopController:Start()
-	--> walking up opens it, walking off shuts it; the X shuts it too, and then it stays shut until
-	--> the player has walked off and come back
+	--> keeps a prompt on this player's own shopkeeper, and shuts the shop once they walk off
 	task.spawn(function()
 		while true do
 			task.wait(Poll)
 
-			local Close = NearestShop() <= OpenRange
+			local Keeper = self:GetKeeper()
 
-			if Close and not self.Near then
-				self.Near = true
-				UIController:Open(ScreenName)
-			elseif not Close and self.Near then
-				self.Near = false
+			if Keeper and Keeper ~= self.Keeper then
+				self.Keeper = Keeper
+				self:_Prompt(Keeper)
+			end
+
+			local Character = Players.LocalPlayer.Character
+			local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+
+			if not Keeper or not Root or not Root:IsA("BasePart") or not UIController:IsOpen(ScreenName) then
+				continue
+			end
+
+			if (Keeper.Position - Root.Position).Magnitude > CloseRange then
 				UIController:Close(ScreenName, true)
 			end
 		end

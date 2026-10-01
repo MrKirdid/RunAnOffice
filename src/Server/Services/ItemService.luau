@@ -83,6 +83,35 @@ local function PublishCarry(Player: Player, Held: any)
 	end
 end
 
+--> Putting what is in hand away instead of onto a desk. There is no dropping any more: a thing
+--> picked up is either placed or stashed. A stolen part has to be secured first, which is the
+--> server having seen the thief home, so nothing the client says gets a part off the hook. The
+--> whole list is written back rather than inserted into, so what replicates is one set the
+--> client cannot read half of. GearService stashes through here too, when a gear is drawn.
+function ItemService:Stash(Player: Player): boolean
+	local Data = PlayerData[Player]
+	assert(Data, `No loaded data for {Player.Name}`)
+
+	local Item = Data.Holding()
+
+	if not Items.IsHeld(Item) or Item.StolenFrom ~= nil then
+		return false
+	end
+
+	local Inventory = table.clone(Data.Inventory())
+
+	if #Inventory >= Items.MaxInventory then
+		return false
+	end
+
+	table.insert(Inventory, Items.Strip(Item))
+
+	Data.Inventory(Inventory)
+	Data.Holding({})
+
+	return true
+end
+
 function ItemService:HandlePlayer(Player: Player)
 	task.spawn(function()
 		local Data = PlayerData.Service:waitForData(Player)
@@ -95,6 +124,14 @@ function ItemService:HandlePlayer(Player: Player)
 
 		Data.Holding.Changed(function(Held: any)
 			PublishCarry(Player, Held)
+
+			--> both hands go round what is carried, so a gear out is put away the moment
+			--> anything is picked up, stolen or taken out of the inventory
+			local Humanoid = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
+
+			if Items.IsHeld(Held) and Humanoid then
+				Humanoid:UnequipTools()
+			end
 		end)
 	end)
 end
@@ -223,33 +260,8 @@ function ItemService:Init()
 		SlotRolls[Player] = nil
 	end)
 
-	--> Putting what is in hand away instead of onto a desk. There is no dropping any more: a
-	--> thing picked up is either placed or stashed. A stolen part has to be secured first, which
-	--> is the server having seen the thief home, so nothing the client says gets a part off the
-	--> hook. The whole list is written back rather than inserted into, so what replicates is one
-	--> set the client cannot read half of.
 	NetworkingServer.Items.Stash.On(function(Player): boolean
-		local Data = PlayerData[Player]
-		assert(Data, `No loaded data for {Player.Name}`)
-
-		local Item = Data.Holding()
-
-		if not Items.IsHeld(Item) or Item.StolenFrom ~= nil then
-			return false
-		end
-
-		local Inventory = table.clone(Data.Inventory())
-
-		if #Inventory >= Items.MaxInventory then
-			return false
-		end
-
-		table.insert(Inventory, Items.Strip(Item))
-
-		Data.Inventory(Inventory)
-		Data.Holding({})
-
-		return true
+		return self:Stash(Player)
 	end)
 
 	--> Taking one thing out of the inventory into the hands, by its place in the list. The list

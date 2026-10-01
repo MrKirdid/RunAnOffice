@@ -4,15 +4,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local GearShopController = require(Shared.Controllers.GearShopController)
-local PlotController = require(Shared.Controllers.PlotController)
 local TutorialConfigs = require(Shared.Configs.Tutorial)
 local UIController = require(Shared.Controllers.UIController)
 
 --> The beam from the player's feet to the gear shop on their own plot, and once the shop is open
---> the arrow over the free gear's button. The shop opens on its own when walked up to. The server
+--> the arrow over the free gear's button. The shopkeeper's prompt opens the shop. The server
 --> waives the price while the save is on this step and puts the gear straight in the backpack.
 
-local ShopPath = { "Fcts", "Shop" }
 local ScreenName = "GearShop"
 local ShopWait = 15
 
@@ -23,30 +21,21 @@ local LayoutDelay = 0.35
 --> Those are Fastsignal connections, which are not RBXScriptConnections but disconnect like one.
 type Connection = RBXScriptConnection | { Disconnect: (self: any) -> () }
 
---> The shop on the player's plot, as a part the beam can end in: the model's primary part, or
---> any part in it.
+--> The shopkeeper on the player's plot, whose prompt opens the shop: the beam ends at their head.
 local function FindShop(): BasePart?
 	local Deadline = os.clock() + ShopWait
 
 	while os.clock() < Deadline do
 		--> looked up again each pass: the plot model can land after the number it is filed under
-		local _, Plot = PlotController:GetPlot(Players.LocalPlayer)
-		local Current: Instance? = Plot
+		local Keeper = GearShopController:GetKeeper()
+		local Head = Keeper and Keeper.Parent and Keeper.Parent:FindFirstChild("Head")
 
-		for _, Step in ShopPath do
-			Current = Current and Current:FindFirstChild(Step)
+		if Head and Head:IsA("BasePart") then
+			return Head
 		end
 
-		if Current and Current:IsA("BasePart") then
-			return Current
-		end
-
-		if Current and Current:IsA("Model") then
-			local Part = Current.PrimaryPart or Current:FindFirstChildWhichIsA("BasePart", true)
-
-			if Part then
-				return Part
-			end
+		if Keeper then
+			return Keeper
 		end
 
 		task.wait(0.25)
