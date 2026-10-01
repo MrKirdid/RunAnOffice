@@ -186,13 +186,17 @@ local Colors: { [string]: Color } = {
 	},
 }
 
-local LOCK_TEXT = "🔒"
-local LOCK_SIZE = 0.42
+--> the lock on a blacked-out node: the image behind decal 15117261710, tinted a cool grey and let
+--> half through so it sits in the dark hex rather than shouting over the nodes you can buy
+local LOCK_IMAGE = "rbxassetid://15117261700"
+local LOCK_SIZE = 0.4
+local LOCK_COLOR = Color3.fromRGB(150, 155, 170)
+local LOCK_TRANSPARENCY = 0.45
 
 type Instances = {
 	node: TextButton,
 	icon: ImageLabel,
-	lock: TextLabel,
+	lock: ImageLabel,
 	primaryText: TextLabel,
 	primaryTextStroke: UIStroke,
 	price: Frame,
@@ -329,14 +333,16 @@ local function buildNodeInstance(): Instances
 		ZIndex = 2,
 	}, node)
 
-	local lock: TextLabel = create("TextLabel", {
+	local lock: ImageLabel = create("ImageLabel", {
 		Name = "Lock",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
+		Image = LOCK_IMAGE,
+		ImageColor3 = LOCK_COLOR,
+		ImageTransparency = LOCK_TRANSPARENCY,
 		Position = UDim2.fromScale(0.5, 0.5),
+		ScaleType = Enum.ScaleType.Fit,
 		Size = UDim2.fromScale(LOCK_SIZE, LOCK_SIZE),
-		Text = LOCK_TEXT,
-		TextScaled = true,
 		Visible = false,
 		ZIndex = 3,
 	}, node)
