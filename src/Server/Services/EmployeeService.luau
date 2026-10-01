@@ -60,6 +60,15 @@ local MaxGroundHits = 4
 local MarkerNames = { EmployeeSpawn = true, EmployeeEnd = true }
 local WaypointName = "EmployeeHaveToGoTo"
 
+--> The walk in is a curve, not a corner: how far the two handles of the bend sit from the corner
+--> it rounds, as a share of each leg (0 hugs the corner, 1 cuts straight across the yard and
+--> into the board and the bin), and roughly how many studs apart the points along it are.
+--> 0.2 was checked against the yard from both sides of the road, out to the next plot along.
+local CurveRound = 0.2
+local CurveSpacing = 6
+local CurveMinPoints = 4
+local CurveMaxPoints = 24
+
 local NextUID = 0
 
 --> Multiplies the luck every employee spawn rolls at, for the whole server. Deliberately scoped to
@@ -175,11 +184,31 @@ local function GetSeatTarget(Plot: Model, Seat: Seat): Vector3?
 	return Pad and (Pad :: BasePart).Position
 end
 
+--> Points along a curve from where the employee is to the door, bent round the corner in front of
+--> the door so it leaves along the road and swings in, rather than walking to the corner and
+--> turning on the spot. The first point is not included: the employee is already standing there.
+local function Bend(From: Vector3, Corner: Vector3, To: Vector3): { Vector3 }
+	local Handle1 = Corner:Lerp(From, CurveRound)
+	local Handle2 = Corner:Lerp(To, CurveRound)
+	local Length = (Corner - From).Magnitude + (To - Corner).Magnitude
+	local Count = math.clamp(math.round(Length / CurveSpacing), CurveMinPoints, CurveMaxPoints)
+	local Points = {}
+
+	for Index = 1, Count do
+		local T = Index / Count
+		local U = 1 - T
+
+		table.insert(Points, From * U ^ 3 + Handle1 * (3 * U ^ 2 * T) + Handle2 * (3 * U * T ^ 2) + To * T ^ 3)
+	end
+
+	return Points
+end
+
 --> Every bought employee routes through the plot's own waypoint before its seat, so they all
 --> enter the building the same way instead of cutting whatever line is shortest. Bought off the
 --> road to one side, the line to the door runs through the board, the bin and the buttons in the
---> yard, so they first walk along the road to straight in front of the door and turn in there:
---> the waypoint, slid in the plot's own space back to the depth the employee is already at.
+--> yard, so the walk bends round the point straight in front of the door: the waypoint, slid in
+--> the plot's own space back to the depth the employee is already at.
 local function GetSeatPath(Player: Player, Seat: Seat, From: Vector3): { Vector3 }?
 	local Plot = PlotService:GetPlot(Player)
 	local Target = Plot and GetSeatTarget(Plot, Seat)
@@ -199,8 +228,11 @@ local function GetSeatPath(Player: Player, Seat: Seat, From: Vector3): { Vector3
 	local Pivot = Plot:GetPivot()
 	local Local = Pivot:PointToObjectSpace(Door)
 	local Front = Pivot:PointToWorldSpace(Vector3.new(Local.X, Local.Y, Pivot:PointToObjectSpace(From).Z))
+	local Path = Bend(From, Front, Door)
 
-	return { Front, Door, Target }
+	table.insert(Path, Target)
+
+	return Path
 end
 
 --> Seats already promised to an employee on its way over, which are not free to promise again.
