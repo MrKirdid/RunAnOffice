@@ -105,11 +105,14 @@ function Follow:Start(To: Target)
 	TweenService:Create(Beam, GrowTween, { Width0 = BeamWidth, Width1 = BeamWidth }):Play()
 end
 
---> Moves the far end of the beam to another target without growing it in again.
+--> Moves the far end of the beam to another target without growing it in again. Either end
+--> goes with whatever it was on, so a target that has left or a character that has respawned
+--> takes one along with it; then the beam is run again from scratch instead.
 function Follow:Switch(To: Target)
-	local Beam, Head = self.Beam, self.Head
+	local Beam, Head, Tail = self.Beam, self.Head, self.Tail
 
-	if not Beam or not Head then
+	if not Beam or not Head or not Head.Parent or not Tail or not Tail.Parent then
+		self:Start(To)
 		return
 	end
 

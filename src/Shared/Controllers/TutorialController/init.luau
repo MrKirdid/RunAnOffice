@@ -10,7 +10,6 @@ local Follow = require(script.Follow)
 local Gui = require(script.Gui)
 local Information = require(script.Information)
 local NetworkingClient = require(Shared.Networking.networkingClient)
-local Overhead = require(script.Overhead)
 local PlayerData = require(Shared.PlayerData).client
 local ScreenShakeController = require(Shared.Controllers.ScreenShakeController)
 local SoundController = require(Shared.Controllers.SoundController)
@@ -38,7 +37,6 @@ local TutorialController = {
 
 	Arrow = Arrow,
 	Follow = Follow,
-	Overhead = Overhead,
 	Information = Information,
 
 	--> the step on the screen right now, by index in the config and by module
@@ -110,7 +108,6 @@ function TutorialController:_Finish()
 
 	self.Arrow:Stop()
 	self.Follow:Stop()
-	self.Overhead:Stop()
 	self:_ShowHud()
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
 	self.Information:Display(TutorialConfigs.FinishText, nil, true)

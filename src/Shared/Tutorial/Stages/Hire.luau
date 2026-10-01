@@ -8,9 +8,9 @@ local EmployeeController = require(Shared.Controllers.EmployeeController)
 local PlayerData = require(Shared.PlayerData).client
 local TutorialConfigs = require(Shared.Configs.Tutorial)
 
---> The arrow over the player's head, turned towards whichever unhired employee the player can
---> actually pay for is nearest right now. They walk, so the target is picked again every frame.
---> The server counts the hire the moment it is paid for.
+--> The beam from the player's feet to whichever unhired employee the player can actually pay for
+--> is nearest right now. They walk, so the target is picked again every frame and the beam's far
+--> end moved when it changes. The server counts the hire the moment it is paid for.
 
 --> How long with nobody affordable in the street before the bar says so.
 local NobodyPatience = 4
@@ -21,6 +21,9 @@ local Stage = {
 	--> when the street last had somebody affordable in it, and whether the bar has said it has not
 	SeenAt = 0,
 	Told = false,
+
+	--> who the beam is on, so it is only moved when that changes
+	Target = nil :: BasePart?,
 }
 
 --> The nearest employee in the street with nobody's name on them and a price the player can pay,
@@ -56,16 +59,26 @@ end
 function Stage.Start(Tutorial: any)
 	Stage.SeenAt = os.clock()
 	Stage.Told = false
+	Stage.Target = nil
 
-	Tutorial.Overhead:Start(NearestAffordable)
-
-	--> says when there has been nobody to point at for a while
+	--> aims the beam, and says when there has been nobody to point at for a while
 	table.insert(
 		Stage.Connections,
 		RunService.Heartbeat:Connect(function()
 			local Now = os.clock()
+			local Target = NearestAffordable()
 
-			if NearestAffordable() then
+			if Target ~= Stage.Target then
+				Stage.Target = Target
+
+				if Target then
+					Tutorial.Follow:Switch(Target)
+				else
+					Tutorial.Follow:Stop()
+				end
+			end
+
+			if Target then
 				Stage.SeenAt = Now
 				Stage.Told = false
 				return
@@ -78,11 +91,12 @@ function Stage.Start(Tutorial: any)
 		end)
 	)
 
-	--> the arrow follows the character's root, which a respawn replaces
+	--> the beam's near end is on the character's root, which a respawn replaces; forgetting the
+	--> target has the next frame run it again to the new one
 	table.insert(
 		Stage.Connections,
 		Players.LocalPlayer.CharacterAdded:Connect(function()
-			Tutorial.Overhead:Start(NearestAffordable)
+			Stage.Target = nil
 		end)
 	)
 end
@@ -94,7 +108,8 @@ function Stage.Cleanup(Tutorial: any)
 
 	table.clear(Stage.Connections)
 
-	Tutorial.Overhead:Stop()
+	Stage.Target = nil
+	Tutorial.Follow:Stop()
 end
 
 return Stage
