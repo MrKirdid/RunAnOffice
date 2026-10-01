@@ -174,11 +174,25 @@ local Colors: { [string]: Color } = {
 		text = Color3.fromRGB(175, 175, 180),
 		stroke = BLACK,
 	},
+	--> more than a ring past anything owned: a black hex with a lock on it and nothing else, so the
+	--> shape of the whole tree shows without giving away what is in it
+	hidden = {
+		backgroundImage = ASSETS.background,
+		backgroundTint = Color3.fromRGB(16, 16, 20),
+		glow = BLACK,
+		icon = BLACK,
+		text = WHITE,
+		stroke = BLACK,
+	},
 }
+
+local LOCK_TEXT = "🔒"
+local LOCK_SIZE = 0.42
 
 type Instances = {
 	node: TextButton,
 	icon: ImageLabel,
+	lock: TextLabel,
 	primaryText: TextLabel,
 	primaryTextStroke: UIStroke,
 	price: Frame,
@@ -313,6 +327,18 @@ local function buildNodeInstance(): Instances
 		ScaleType = Enum.ScaleType.Fit,
 		Size = UDim2.fromScale(ICON_SIZE, ICON_SIZE),
 		ZIndex = 2,
+	}, node)
+
+	local lock: TextLabel = create("TextLabel", {
+		Name = "Lock",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(LOCK_SIZE, LOCK_SIZE),
+		Text = LOCK_TEXT,
+		TextScaled = true,
+		Visible = false,
+		ZIndex = 3,
 	}, node)
 
 	local primaryText: TextLabel = create("TextLabel", {
@@ -481,6 +507,7 @@ local function buildNodeInstance(): Instances
 	return {
 		node = node,
 		icon = icon,
+		lock = lock,
 		primaryText = primaryText,
 		primaryTextStroke = primaryTextStroke,
 		price = price,
@@ -527,6 +554,7 @@ export type NodeData = {
 	_colorName: string,
 	_backgroundIconOverride: string?,
 	_locked: boolean,
+	_hidden: boolean,
 	_visible: boolean,
 	_alertVisible: boolean,
 	_highlighted: boolean,
@@ -560,6 +588,7 @@ function NodeConstructor.new(config: Config, parentNode: Node?): Node
 		_color = Colors.default,
 		_colorName = "default",
 		_locked = false,
+		_hidden = false,
 		_visible = false,
 		_alertVisible = false,
 		_highlighted = false,
@@ -660,6 +689,15 @@ function NodeConstructor._applyColor(self: Node, color: Color)
 	instances.priceTextStroke.Color = color.stroke
 end
 
+--> the palette the node is drawn in right now: hidden over locked over its own
+function NodeConstructor._currentColor(self: Node): Color
+	if self._hidden then
+		return Colors.hidden
+	end
+
+	return if self._locked then Colors.locked else self._color
+end
+
 --> red while it cannot be paid for, green while it can, the palette's own text once it is owned
 function NodeConstructor._priceColor(self: Node, color: Color): Color3
 	if self._locked then
@@ -689,9 +727,7 @@ function NodeConstructor.setColor(self: Node, color: string | Color)
 	self._color = palette
 	self._colorName = colorName
 
-	if not self._locked then
-		self:_applyColor(palette)
-	end
+	self:_applyColor(self:_currentColor())
 end
 
 function NodeConstructor.getColor(self: Node): Color
@@ -708,16 +744,38 @@ function NodeConstructor.setIsLocked(self: Node, isLocked: boolean)
 	end
 
 	self._locked = isLocked
-	self:_applyColor(if isLocked then Colors.locked else self._color)
+	self:_applyColor(self:_currentColor())
 end
 
 function NodeConstructor.isLocked(self: Node): boolean
 	return self._locked
 end
 
+--> blacked out with a lock over it: no icon, no name, no header. the price is the tree's to clear
+function NodeConstructor.setIsHidden(self: Node, isHidden: boolean)
+	if self._hidden == isHidden then
+		return
+	end
+
+	self._hidden = isHidden
+
+	local instances = self._instances
+
+	instances.icon.Visible = not isHidden
+	instances.primaryText.Visible = not isHidden
+	instances.lock.Visible = isHidden
+	instances.header.Visible = not isHidden and self._config.headerText ~= nil
+
+	self:_applyColor(self:_currentColor())
+end
+
+function NodeConstructor.isHidden(self: Node): boolean
+	return self._hidden
+end
+
 function NodeConstructor.setBackgroundIcon(self: Node, icon: string?)
 	self._backgroundIconOverride = icon
-	self:_applyColor(if self._locked then Colors.locked else self._color)
+	self:_applyColor(self:_currentColor())
 end
 
 function NodeConstructor.setIsHighlighted(self: Node, isHighlighted: boolean)
@@ -726,7 +784,7 @@ function NodeConstructor.setIsHighlighted(self: Node, isHighlighted: boolean)
 	end
 
 	self._highlighted = isHighlighted
-	self._instances.priceText.TextColor3 = self:_priceColor(if self._locked then Colors.locked else self._color)
+	self._instances.priceText.TextColor3 = self:_priceColor(self:_currentColor())
 
 	if self._pulse then
 		self._pulse:Cancel()

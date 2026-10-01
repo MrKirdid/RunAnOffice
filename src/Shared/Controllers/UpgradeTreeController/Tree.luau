@@ -24,7 +24,7 @@ local CollapseStep = 0.028
 --> the spin a node leaves with, as it shrinks into nothing
 local CollapseSpin = 220
 
---> a node revealed by a purchase rather than by the screen opening. long enough that the node
+--> a node opened up by a purchase rather than by the screen opening. long enough that the node
 --> being bought reads as the thing that opened it, short enough to still feel like one press
 local UnlockDelay = 0.12
 
@@ -126,10 +126,10 @@ function Tree.GetNode(self: Tree, Id: string): Node?
 	return self.Nodes[Id]
 end
 
---> The tree only draws what is yours and what you could buy next. Anything further out is not
---> dimmed, it is not there: the first press opens the ring behind it.
---> Of what is drawn, three states read differently: owned carries no price, affordable glows, and
---> one you cannot pay for yet keeps its price but greys out.
+--> The whole tree is drawn, so its shape shows from the first open. Four states read differently:
+--> owned carries no price, affordable glows, one you could buy next but cannot pay for yet keeps
+--> its price and greys out, and anything further out is a black hex with a lock and nothing else,
+--> until the press behind it opens it up.
 function Tree.Refresh(self: Tree, Opening: boolean?)
 	local Cash = PlayerData.Cash()
 	local IsOpen = self.Options.IsOpen()
@@ -138,19 +138,31 @@ function Tree.Refresh(self: Tree, Opening: boolean?)
 		local Config = Upgrades.List[Id]
 		local IsOwned = UpgradeRules.IsOwned(self.Owned, Id)
 		local IsAvailable = UpgradeRules.IsAvailable(self.Owned, Id)
-		local IsVisible = UpgradeRules.IsVisible(self.Owned, Id) and (self.Options.ShowActions or not Config.IsAction)
+		local IsKnown = UpgradeRules.IsVisible(self.Owned, Id)
 		local CanAfford = IsAvailable and Cash >= UpgradeRules.GetCost(Id)
-		local ShouldShow = IsVisible and IsOpen
+		local ShouldShow = IsOpen and (self.Options.ShowActions or not Config.IsAction)
 
 		if ShouldShow ~= Node:isVisible() then
-			--> opening staggers by ring so the whole tree unfolds; a purchase only ever reveals
-			--> the ring next to it, which lands as one beat instead
-			local Delay = if not ShouldShow then 0 elseif Opening then Node:getDepth() * RevealStep else UnlockDelay
+			--> opening staggers by ring so the whole tree unfolds outwards
+			local Delay = if not ShouldShow then 0 elseif Opening then Node:getDepth() * RevealStep else 0
 
 			Node:setIsVisible(ShouldShow, Delay)
 		end
 
-		if not IsVisible then
+		--> a purchase opens the ring behind it: those come out of the dark with a punch, a beat
+		--> after the node that was bought
+		if IsKnown and Node:isHidden() and not Opening and Node:isVisible() then
+			task.delay(UnlockDelay, function()
+				Node:punch()
+			end)
+		end
+
+		Node:setIsHidden(not IsKnown)
+
+		if not IsKnown then
+			Node:setIsLocked(false)
+			Node:setIsHighlighted(false)
+			Node:setPrice(nil)
 			continue
 		end
 
@@ -240,9 +252,9 @@ function Tree.Layout(self: Tree)
 	end
 end
 
---> the corners the drawn part of the tree occupies, in canvas scale, node bodies included. hidden
---> nodes are still laid out -- their children hang off them -- but a view fitted to those would
---> open zoomed out on empty canvas
+--> the corners the known part of the tree occupies, in canvas scale, node bodies included. the
+--> blacked-out rest is drawn too and can be panned out to, but a view fitted to the whole tree
+--> would open zoomed out so far the nodes you can actually buy are specks
 function Tree.GetBounds(self: Tree): (Vector2, Vector2)
 	local Half = NodeConstructor.NodeSize.Y.Scale / 2
 	local CanvasSize = self.Canvas.AbsoluteSize

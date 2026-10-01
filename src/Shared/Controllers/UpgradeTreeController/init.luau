@@ -168,11 +168,12 @@ local function PlaceTooltip(Card: Frame)
 end
 
 --> What the card says about a node: its name, the one line its definition gives, and the price
---> or that it is already owned. The Exit node says nothing at all.
+--> or that it is already owned. The Exit node says nothing at all, and neither does one still
+--> blacked out: what it is stays a secret until the ring before it is bought.
 function UpgradeTreeController:_ShowTooltip(Id: string, Config: Upgrade)
 	local Card = self.Tooltip
 
-	if not Card or Config.IsAction then
+	if not Card or Config.IsAction or not UpgradeRules.IsVisible(self.Owned, Id) then
 		return
 	end
 
