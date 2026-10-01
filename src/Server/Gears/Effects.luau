@@ -10,6 +10,7 @@ local GearConfigs = require(Shared.Configs.Gears)
 local NetworkingServer = require(Shared.Networking.networkingServer)
 local SoundConfigs = require(Shared.Configs.Sounds)
 local StatusService = require(ServerScriptService.Server.Services.StatusService)
+local StealingService = require(ServerScriptService.Server.Services.StealingService)
 
 --> What each gear does when it is used, keyed like Configs.Gears. Run on the server, off a use
 --> GearService has already checked, so nothing here asks whether the player owns the thing or
@@ -501,6 +502,11 @@ local function Swing(Power: number): Effect
 			end
 
 			StatusService:Fling(Other, (Flat.Unit + Vector3.new(0, SwingLift, 0)) * Power)
+
+			--> what the bat is for: a thief it connects with drops whoever they were carrying off,
+			--> and the employee goes straight back to the desk they were taken from
+			StealingService:Caught(Other)
+
 			PlaySound("Bonk", Root)
 			Puff(Root, BonkColor, 250, 0.7, 12)
 			Kick(Other, SwingShake)

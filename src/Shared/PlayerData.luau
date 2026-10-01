@@ -81,6 +81,14 @@ local Config = {
 		--> Gears bought from the gear shop, by key in Configs.Gears, kept for good; the ones in the
 		--> backpack right now; and how many may be in it at once, raised by the tree. Gears and
 		--> EquippedGears are written only by GearService, GearSlots only by an upgrade.
+		--> Every part ever rolled, by Discoveries.Key, for the Index. Only grows. The starter desk's
+		--> three parts count as found, since the player has them from the first second.
+		Discovered = {
+			["Computer/Mossy"] = true,
+			["Keyboard/Mossy"] = true,
+			["Monitor/Mossy"] = true,
+		} :: { [string]: boolean },
+
 		Gears = {} :: { [string]: boolean },
 		EquippedGears = {} :: { [string]: boolean },
 		GearSlots = 2,
@@ -114,6 +122,10 @@ local Config = {
 		--> while in, for OfflineEarningsService. 0 on a save that has never been stamped, which pays
 		--> nothing: a template default of os.time() would be the server's boot time instead.
 		LastSeen = 0,
+
+		--> os.time() the free cash on the hud was last claimed, 0 for never. Written only by
+		--> RewardService; the client counts down off it to show when the next one is ready.
+		LastClaim = 0,
 		TotalCashEarned = 0,
 
 		Gamepasses = {},

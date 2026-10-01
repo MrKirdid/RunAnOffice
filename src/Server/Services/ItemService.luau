@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage.Shared
 local NetworkingServer = require(Shared.Networking.networkingServer)
 local PlayerData = require(Shared.PlayerData).server
 local DeskData = require(Shared.Utilities.DeskData)
+local Discoveries = require(Shared.Utilities.Discoveries)
 local EmployeeService = require(script.Parent.EmployeeService)
 local Items = require(Shared.Utilities.Items)
 local PartConfigs = require(Shared.Configs.Parts)
@@ -213,6 +214,7 @@ function ItemService:Init()
 		Rolled[Target.Component] = Variant
 
 		Desk(Rolled)
+		Discoveries.Mark(Data, Target.Component, Variant)
 
 		return { Component = Target.Component, Variant = Variant }
 	end)

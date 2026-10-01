@@ -24,7 +24,7 @@ Blink 0.18.8. Edit `network.blink`, run `blink network.blink`. Output (`src/Shar
 
 ## Data
 
-`src/Shared/PlayerData.luau` — Dataservicetyped over ProfileStore. Keys `dev1.01` (Studio) / `prod1.01` (live). Server `require(PlayerData).server`, client `.client`. Read `Data.Cash()`, write `Data.Cash(Fn)`; server waits with `PlayerData.Service:waitForData(Player)`. Floors reach clients via player attribute (`PublishFloors` in PlotService), revenue via `RateAttribute`.
+`src/Shared/PlayerData.luau` — Dataservicetyped over ProfileStore. Keys `dev1.05` (Studio) / `prod1.05` (live). Server `require(PlayerData).server`, client `.client`. Read `Data.Cash()`, write `Data.Cash(Fn)`; server waits with `PlayerData.Service:waitForData(Player)`. Floors reach clients via player attribute (`PublishFloors` in PlotService), revenue via `RateAttribute`.
 
 ## UI
 

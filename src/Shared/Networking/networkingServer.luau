@@ -181,6 +181,7 @@ Queue.Reliable[23] = table.create(256)
 Queue.Reliable[25] = table.create(256)
 Queue.Reliable[26] = table.create(256)
 Queue.Reliable[27] = table.create(256)
+Queue.Reliable[29] = table.create(256)
 export type Player = Player
 export type Visiting_Desk = { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }
 export type Employees_UID = number
@@ -922,6 +923,19 @@ function SerdesFunctions.Gears_WriteEVENT_Hit(Value: number): ()
 	buffer.writef32(SendBuffer, BLOCK_START + 1, Value)
 end
 
+function SerdesFunctions.Rewards_ReadFUNCTION_DATA_Claim(): (nil)
+	return nil
+end
+
+function SerdesFunctions.Rewards_WriteFUNCTION_RETURN_Claim(Value: number, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 11 bytes
+	local BLOCK_START = Allocate(11)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 29)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
+	buffer.writef64(SendBuffer, BLOCK_START + 3, Value)
+end
+
 if not RunService:IsRunning() then
 	local NOOP = function() end
 	local Returns = table.freeze({
@@ -1064,6 +1078,11 @@ if not RunService:IsRunning() then
 			FireAll = NOOP,
 			FireList = NOOP,
 			FireExcept = NOOP
+		},
+	},
+	Rewards = {
+		Claim = {
+			On = NOOP
 		},
 	},
 	})
@@ -1371,6 +1390,19 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 					warn("[Blink]: Event queue of \"Use\" exceeded 256, did you forget to implement a listener?")
 				end
 				table.insert(Queue.Reliable[27], {Player, Value} :: {any})
+			end
+		elseif Index == 29 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+			local Value: nil = SerdesFunctions.Rewards_ReadFUNCTION_DATA_Claim()
+			if Events.Reliable[29] ~= nil then
+				task.spawn(Events.Reliable[29], Player, Value, InvocationIdentifier)
+			else
+				if #Queue.Reliable[29] > 256 then
+					warn("[Blink]: Event queue of \"Claim\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[29], {Player, Value, InvocationIdentifier} :: {any})
 			end
 		end
 	end
@@ -2397,6 +2429,36 @@ local Returns = table.freeze({
 					PlayersMap[Player] = Save()
 				end
 			end,
+		},
+	},
+	Rewards = {
+		Claim = {
+		On = function(Listener: (Player, nil) -> (number)): ()
+			Events.Reliable[29] = function(Player: Player, Value: nil, InvocationIdentifier: number): ()
+				local ReturnValue: number;
+				local Success, Error = pcall(function ()
+					ReturnValue = Listener(Player, Value)
+				end)
+				Load(PlayersMap[Player])
+				if Success ~= true then
+					local Position = Allocate(3)
+					buffer.writeu8(SendBuffer, Position, 29)
+					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
+					buffer.writeu8(SendBuffer, Position + 2, 0)
+					warn(`"Claim" encountered an error, {Error}`)
+				else
+					SerdesFunctions.Rewards_WriteFUNCTION_RETURN_Claim(ReturnValue, InvocationIdentifier)
+				end
+				PlayersMap[Player] = Save()
+			end
+			task.spawn(function (): ()
+				local EventQueue = Queue.Reliable[29] or {}
+				Queue.Reliable[29] = nil
+				for Index, Arguments in EventQueue do
+					Events.Reliable[29](table.unpack(Arguments))
+				end
+			end)
+		end
 		},
 	},
 })

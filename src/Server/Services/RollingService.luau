@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
 
+local Discoveries = require(Shared.Utilities.Discoveries)
 local NetworkingServer = require(Shared.Networking.networkingServer)
 local PlayerData = require(Shared.PlayerData).server
 local Rolling = require(Shared.Utilities.Rolling)
@@ -53,6 +54,7 @@ function RollingService:Init()
 
 		for Slot, Result in Results do
 			Data.Pads[Slot](Result)
+			Discoveries.Mark(Data, Result.Component, Result.Variant)
 		end
 
 		return {

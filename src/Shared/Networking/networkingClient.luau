@@ -189,6 +189,7 @@ Queue.Reliable[24] = table.create(256)
 Queue.Reliable[25] = table.create(256)
 Queue.Reliable[26] = table.create(256)
 Queue.Reliable[28] = table.create(256)
+Queue.Reliable[29] = table.create(256)
 export type Player = Player
 export type Visiting_Desk = { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }
 export type Employees_UID = number
@@ -1039,6 +1040,24 @@ function SerdesFunctions.Gears_ReadEVENT_Hit(): (number)
 	return Value
 end
 
+function SerdesFunctions.Rewards_WriteFUNCTION_DATA_Claim(Value: nil, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 2 bytes
+	local BLOCK_START = Allocate(2)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 29)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+end
+
+function SerdesFunctions.Rewards_ReadFUNCTION_RETURN_Claim(): (number)
+	-- Read BLOCK: 9 bytes
+	local BLOCK_START = Read(9)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	local Value = buffer.readf64(RecieveBuffer, BLOCK_START + 1)
+	return Value
+end
+
 if not RunService:IsRunning() then
 	local NOOP = function() end
 	local Returns = table.freeze({
@@ -1151,6 +1170,11 @@ if not RunService:IsRunning() then
 		},
 		Hit = {
 			On = NOOP
+		},
+	},
+	Rewards = {
+		Claim = {
+			Invoke = NOOP
 		},
 	},
 	})
@@ -1492,6 +1516,17 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 					warn("[Blink]: Event queue of \"Hit\" exceeded 256, did you forget to implement a listener?")
 				end
 				table.insert(Queue.Reliable[28], {Value} :: {any})
+			end
+		elseif Index == 29 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Rewards_ReadFUNCTION_RETURN_Claim()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
 			end
 		end
 	end
@@ -2080,6 +2115,30 @@ local Returns = table.freeze({
 						Events.Reliable[28] = nil
 					end
 				end
+			end
+		},
+	},
+	Rewards = {
+		Claim = {
+			Invoke = function(Value: nil)
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Rewards_WriteFUNCTION_DATA_Claim(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: number = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"Claim\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
 			end
 		},
 	},

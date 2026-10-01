@@ -347,3 +347,12 @@ scope Gears {
 		Data: f32
 	}
 }
+
+scope Rewards {
+	-- the free cash on the hud's right side: a minute of income, once every quarter of an hour. The
+	-- server checks the clock off the save and pays it; 0 means it refused, too soon or nothing to pay
+	function Claim {
+		Yield: Promise,
+		Return: f64
+	}
+}

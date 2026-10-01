@@ -181,5 +181,7 @@ return {
 	},
 	Gears = {
 	},
+	Rewards = {
+	},
 
 }
