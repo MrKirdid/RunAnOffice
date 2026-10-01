@@ -3,12 +3,16 @@
 --> decide which of its own floors to hide, so the server and the client never disagree about what
 --> counts as inside. The plot is pivoted into place, so the test runs in each box's own space.
 
+--> Owned leaves out the floors the owner has not bought. Those stand stacked on the server but are
+--> hidden and walked through on every client, so the box of the floor above is just the air over
+--> the roof, and standing on a roof is not being in the base.
+
 local FloorsName = "Floors"
 local BoundsName = "IsInFloor"
 
 local PlotBounds = {}
 
-function PlotBounds.FloorAt(Plot: Model, Position: Vector3): number?
+function PlotBounds.FloorAt(Plot: Model, Position: Vector3, Owned: { number }?): number?
 	local Floors = Plot:FindFirstChild(FloorsName)
 
 	if not Floors then
@@ -23,6 +27,10 @@ function PlotBounds.FloorAt(Plot: Model, Position: Vector3): number?
 			continue
 		end
 
+		if Owned and not table.find(Owned, Floor) then
+			continue
+		end
+
 		local Local = Bounds.CFrame:PointToObjectSpace(Position)
 		local Half = Bounds.Size / 2
 
@@ -34,8 +42,8 @@ function PlotBounds.FloorAt(Plot: Model, Position: Vector3): number?
 	return nil
 end
 
-function PlotBounds.IsInside(Plot: Model, Position: Vector3): boolean
-	return PlotBounds.FloorAt(Plot, Position) ~= nil
+function PlotBounds.IsInside(Plot: Model, Position: Vector3, Owned: { number }?): boolean
+	return PlotBounds.FloorAt(Plot, Position, Owned) ~= nil
 end
 
 return PlotBounds

@@ -81,7 +81,8 @@ type Watch = {
 	--> is cast as the player's own collision group, so what their character passes through by
 	--> the group rules -- their own base's lasers -- is not a wall either
 	WallParams: RaycastParams,
-	--> excludes the player's own character and nothing else, so another player is ground
+	--> excludes the player's own character and the hidden floors and nothing else, so another
+	--> player is ground
 	GroundParams: RaycastParams,
 	LastPosition: Vector3,
 	LastGood: CFrame,
@@ -124,10 +125,15 @@ local AntiCheatService = {
 	--> The collision group each player's character is put in, by whoever put it there. Kept
 	--> here as well as on the watch because it is set before the character exists.
 	Groups = {} :: { [Player]: string },
+	--> Solid on the server and on nobody's screen: the floors of a plot its owner has not bought,
+	--> which every client hides and walks straight through. Left out of every cast, or somebody on
+	--> a roof is read as standing in the walls of the floor above it, by whoever registered them.
+	Hidden = {} :: { [Instance]: { Instance } },
 }
 
 function AntiCheatService:RefreshParams()
 	local Characters = {}
+	local Hidden = {}
 
 	for _, Player in Players:GetPlayers() do
 		if Player.Character then
@@ -135,9 +141,28 @@ function AntiCheatService:RefreshParams()
 		end
 	end
 
-	for _, Watch in self.Watches do
-		Watch.WallParams.FilterDescendantsInstances = Characters
+	for _, Instances in self.Hidden do
+		table.move(Instances, 1, #Instances, #Hidden + 1, Hidden)
 	end
+
+	local Walls = table.clone(Characters)
+	table.move(Hidden, 1, #Hidden, #Walls + 1, Walls)
+
+	for _, Watch in self.Watches do
+		local Ground = table.clone(Hidden)
+		table.insert(Ground, Watch.Character)
+
+		Watch.WallParams.FilterDescendantsInstances = Walls
+		Watch.GroundParams.FilterDescendantsInstances = Ground
+	end
+end
+
+--> What under Key the casts should not see, replacing whatever was there; an empty list clears it.
+--> Keyed by whoever owns the parts, so a plot can say what of it is hidden without knowing what
+--> any other plot said.
+function AntiCheatService:SetHidden(Key: Instance, Instances: { Instance })
+	self.Hidden[Key] = if #Instances > 0 then Instances else nil
+	self:RefreshParams()
 end
 
 --> Tells the checks which collision group the player's character moves as, so a cast agrees with

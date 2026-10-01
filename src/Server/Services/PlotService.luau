@@ -25,13 +25,6 @@ local DropHeight = 5
 --> office and the pads in front of it, not the street behind.
 local SpawnSetback = 14
 
---> An invisible slab over the first floor for as long as the second is not owned. The floor above
---> is hidden on the client while it is locked, and its floor was a roof to jump onto.
-local RoofName = "TutorialRoof"
-local RoofThickness = 1
-local RoofMargin = 16
-local RoofLift = 0.5
-
 --> Floor moves closer together than this are refused. Every move gives the anti-cheat a moment
 --> off, and a client asking for one every frame would never be looked at.
 local TravelCooldown = 1
@@ -51,7 +44,7 @@ local function RemoveBoard(Plot: Model)
 	end
 end
 
---> The volume the first floor fills, which the roof and the arrival are both measured off.
+--> The volume the first floor fills, which the arrival is measured off.
 local function GetFloorVolume(Plot: Model, Floor: number): BasePart?
 	local Floors = Plot:FindFirstChild("Floors")
 	local Folder = Floors and Floors:FindFirstChild(tostring(Floor))
@@ -80,6 +73,9 @@ end
 local PlotService = {
 	Plots = {} :: { [Player]: number },
 	LastTravel = {} :: { [Player]: number },
+	--> Which floors of each plot were last handed to the anti-cheat as hidden. Data changes every
+	--> second with the cash, and the floors almost never, so the casts are only rebuilt on a change.
+	Hidden = {} :: { [Model]: string },
 }
 
 --> A list rather than a count, because a command can unlock floor 3 without floor 2 and a count
@@ -135,51 +131,53 @@ function PlotService:NewPlot(Player: Player)
 
 	Plot:PivotTo(PlotLocation)
 
-	self:RefreshRoof(Player, Plot)
+	self:RefreshFloors(Player, Plot)
 
 	return Plot
 end
 
---> The slab over the first floor, up while the second is locked and gone once it is bought. Read
---> off the first floor's own volume and grown by a margin, so the walls round it are covered too.
-function PlotService:RefreshRoof(Player: Player, Plot: Model?)
+--> The floors a player owns, ascending. Floor 1 before their data has loaded, which is what every
+--> save starts with. The one answer to "is this floor theirs" the base checks and the hidden floors
+--> both read.
+function PlotService:GetFloors(Player: Player): { number }
 	local Data = PlayerData[Player]
 
-	if not Plot then
+	return if Data then DeskData.GetFloors(Data) else { 1 }
+end
+
+--> Every client hides the floors of a plot its owner has not bought, and walks through them, but
+--> they stand solid on the server. The anti-cheat is told to look through them as well, so the
+--> roof of a base is somewhere to stand rather than a wall to be put back out of.
+function PlotService:RefreshFloors(Player: Player, Plot: Model?)
+	local Floors = Plot and Plot:FindFirstChild("Floors")
+
+	if not Plot or not Floors then
 		return
 	end
 
-	local Existing = Plot:FindFirstChild(RoofName)
-	local Owned = if Data then DeskData.GetFloors(Data) else { 1 }
+	local Owned = self:GetFloors(Player)
+	local Hidden = {}
+	local Names = {}
 
-	if table.find(Owned, 2) then
-		if Existing then
-			Existing:Destroy()
+	for _, Folder in Floors:GetChildren() do
+		local Floor = tonumber(Folder.Name)
+
+		if Floor and not table.find(Owned, Floor) then
+			table.insert(Hidden, Folder)
+			table.insert(Names, Folder.Name)
 		end
+	end
 
+	table.sort(Names)
+
+	local Key = table.concat(Names, ",")
+
+	if self.Hidden[Plot] == Key then
 		return
 	end
 
-	if Existing then
-		return
-	end
-
-	local Volume = GetFloorVolume(Plot, 1)
-
-	if not Volume then
-		return
-	end
-
-	local Roof = Instance.new("Part")
-	Roof.Name = RoofName
-	Roof.Anchored = true
-	Roof.Transparency = 1
-	Roof.CanQuery = false
-	Roof.CanTouch = false
-	Roof.CastShadow = false
-	Roof.Size = Vector3.new(Volume.Size.X + RoofMargin, RoofThickness, Volume.Size.Z + RoofMargin)
-	Roof.CFrame = CFrame.new(Volume.Position + Vector3.new(0, Volume.Size.Y / 2 + RoofThickness / 2 + RoofLift, 0))
-	Roof.Parent = Plot
+	self.Hidden[Plot] = Key
+	AntiCheatService:SetHidden(Plot, Hidden)
 end
 
 function PlotService:GetPlot(Player: Player): Model?
@@ -204,6 +202,8 @@ function PlotService:ReleasePlot(Player: Player)
 	end
 
 	Plot.Name = "Released"
+	self.Hidden[Plot] = nil
+	AntiCheatService:SetHidden(Plot, {})
 
 	task.defer(function()
 		Plot:Destroy()
@@ -284,14 +284,14 @@ function PlotService:Init()
 		task.spawn(function()
 			local Data = PlayerData.Service:waitForData(Player)
 
-			self:RefreshRoof(Player, self:GetPlot(Player))
+			self:RefreshFloors(Player, self:GetPlot(Player))
 			PublishFloors(Player)
 
 			--> Bound to the root, which fires for anything underneath it, and re-reads the data
 			--> every time rather than trusting the value it was handed.
 			Data.Changed(function()
 				PublishFloors(Player)
-				self:RefreshRoof(Player, self:GetPlot(Player))
+				self:RefreshFloors(Player, self:GetPlot(Player))
 			end)
 		end)
 

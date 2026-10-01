@@ -97,7 +97,7 @@ function VisitService:FindOwner(Position: Vector3): Player?
 	for Owner, Index in PlotService.Plots do
 		local Plot = Container:FindFirstChild(tostring(Index))
 
-		if Plot and Plot:IsA("Model") and PlotBounds.IsInside(Plot, Position) then
+		if Plot and Plot:IsA("Model") and PlotBounds.IsInside(Plot, Position, PlotService:GetFloors(Owner)) then
 			return Owner
 		end
 	end

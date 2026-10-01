@@ -71,10 +71,10 @@ local function GetRoot(Player: Player): BasePart?
 	return if Root and Root:IsA("BasePart") then Root else nil
 end
 
---> Inside any floor's room box, by the same boxes VisitService and the client read, so the three
---> never disagree about what counts as in.
-local function IsInside(Plot: Model, Position: Vector3): boolean
-	return PlotBounds.IsInside(Plot, Position)
+--> Inside the room box of a floor the owner has bought, by the same boxes VisitService and the
+--> client read, so the three never disagree about what counts as in. The roof is outside.
+local function IsInside(Owner: Player, Plot: Model, Position: Vector3): boolean
+	return PlotBounds.IsInside(Plot, Position, PlotService:GetFloors(Owner))
 end
 
 local function IsAtDoor(Plot: Model, Position: Vector3): boolean
@@ -164,7 +164,7 @@ function BaseLockingService:Lock(Player: Player): boolean
 		--> Remembered so the sweep does not throw them out, but the door is as solid to them as to
 		--> anyone: being inside when it shut is not a way through it, or a thief already in the
 		--> room would walk out with the employee the lock was meant to keep.
-		if Root and (IsInside(Plot, Root.Position) or IsAtDoor(Plot, Root.Position)) then
+		if Root and (IsInside(Player, Plot, Root.Position) or IsAtDoor(Plot, Root.Position)) then
 			Guests[Other] = true
 		end
 	end
@@ -253,7 +253,7 @@ function BaseLockingService:Sweep()
 			end
 
 			local Root = GetRoot(Other)
-			local Inside = Root ~= nil and IsInside(Lock.Plot, Root.Position)
+			local Inside = Root ~= nil and IsInside(Owner, Lock.Plot, Root.Position)
 
 			if not Inside then
 				Lock.Seen[Other] = nil
