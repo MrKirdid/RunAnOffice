@@ -1,4 +1,7 @@
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local NetworkingServer = require(ReplicatedStorage.Shared.Networking.networkingServer)
 
 local AntiCheatService = require(script.Parent.AntiCheatService)
 
@@ -344,21 +347,29 @@ function StatusService:Reveal(Player: Player)
 	end
 end
 
---> Throws the character, limp. The server has to own the assembly for the velocity to take, so it
---> is taken for the length of the throw and handed back after; PlatformStand stops the humanoid
---> standing through it and the ragdoll lets the body flop.
+--> Every limb the ragdoll cut loose from the root is an assembly of its own, and left alone the
+--> engine hands each to whoever is standing nearest, which is usually the one who swung. Their
+--> client then simulates the victim's arms against the victim's own body and both jitter. Given
+--> to the victim, so the whole flop is one client's physics.
+local function OwnLimbs(Player: Player, Character: Model)
+	for _, Part in Character:GetDescendants() do
+		if Part:IsA("BasePart") and Part:CanSetNetworkOwnership() then
+			Part:SetNetworkOwner(Player)
+		end
+	end
+end
+
+--> Throws the character, limp. The joints are the server's to break, so everyone sees the body
+--> go loose, but the root stays with the victim's client and the throw is handed to it to apply:
+--> a character the server owns is replicated to every other screen at the server's physics rate,
+--> which is the five frames a second the flop used to be drawn at. PlatformStand stops the
+--> humanoid standing through it.
 function StatusService:Fling(Player: Player, Velocity: Vector3)
 	local Character = Player.Character
 	local Humanoid = GetHumanoid(Player)
 	local Root = Character and Character:FindFirstChild("HumanoidRootPart")
 
-	if not Humanoid or not Root or not Root:IsA("BasePart") then
-		return
-	end
-
-	local CanOwn = Root:CanSetNetworkOwnership()
-
-	if not CanOwn then
+	if not Character or not Humanoid or not Root or not Root:IsA("BasePart") or Humanoid.Health <= 0 then
 		return
 	end
 
@@ -366,19 +377,18 @@ function StatusService:Fling(Player: Player, Velocity: Vector3)
 
 	self.Flung[Player] = Stamp
 
-	--> The throw is the server's, well past any walk or jump the checks allow. They look away for
-	--> exactly as long as the server owns the root, so there is nothing for the client to fake
-	--> while they do: a longer excuse would hand a cheater who bombs their own feet a free teleport.
-	AntiCheatService:Excuse(Player, FlingTime)
+	--> The client is the one moving the root now, so the checks are told the throw rather than
+	--> told to look away: speed along it is allowed, anything across it is still a walk.
+	AntiCheatService:Excuse(Player, FlingTime, Velocity)
 
-	Root:SetNetworkOwner(nil)
 	Humanoid.PlatformStand = true
 
 	--> a second hit while still limp keeps the joints it already has
-	local Restore = self.Limp[Player] or Ragdoll(Character :: Model, Humanoid)
+	local Restore = self.Limp[Player] or Ragdoll(Character, Humanoid)
 
 	self.Limp[Player] = Restore
-	Root.AssemblyLinearVelocity = Velocity
+	OwnLimbs(Player, Character)
+	NetworkingServer.Gears.Flung.Fire(Player, Velocity)
 
 	task.delay(FlingTime, function()
 		if self.Flung[Player] ~= Stamp then
@@ -394,10 +404,6 @@ function StatusService:Fling(Player: Player, Velocity: Vector3)
 
 		Restore()
 		Humanoid.PlatformStand = false
-
-		if Root:CanSetNetworkOwnership() then
-			Root:SetNetworkOwnershipAuto()
-		end
 	end)
 end
 

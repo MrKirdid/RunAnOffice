@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local GearConfigs = require(Shared.Configs.Gears)
+local GearVfxController = require(Shared.Controllers.GearVfxController)
 local Items = require(Shared.Utilities.Items)
 local NetworkingClient = require(Shared.Networking.networkingClient)
 local PlayerData = require(Shared.PlayerData).client
@@ -24,6 +25,9 @@ local FullText = "All gear slots are full"
 
 --> what it says when a gear is drawn with a stolen employee still in hand, which the server puts back
 local StolenText = "Get them home before pulling out a gear"
+
+--> radians a second the body is spun head over heels when it is thrown
+local TumbleSpeed = 6
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -156,6 +160,8 @@ function GearController:_Wire(Tool: Tool)
 			Swing.Parent = Tool
 		end
 
+		GearVfxController:Swing(Key :: string)
+
 		NetworkingClient.Gears.Use.Fire({
 			Key = Key :: string,
 			Aim = Mouse.Hit.Position,
@@ -197,6 +203,31 @@ function GearController:Init()
 	--> something landed on this player: the fling or the freeze is already done, this is the kick
 	NetworkingClient.Gears.Hit.On(function(Strength: number)
 		ScreenShakeController:Shake(Strength)
+	end)
+
+	--> The throw lands here because this client owns the character. PlatformStand is set ahead of
+	--> the server's copy arriving, or the humanoid spends its first frames standing against it and
+	--> eats the throw. Every part gets it, not just the root: gone limp, each limb is an assembly of
+	--> its own, and a throw on the root alone drags the dead weight of the rest along the floor. The
+	--> tumble is what makes it read as a hit rather than a launch pad.
+	NetworkingClient.Gears.Flung.On(function(Velocity: Vector3)
+		local Character = LocalPlayer.Character
+		local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+		local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+
+		if not Character or not Humanoid or not Root or not Root:IsA("BasePart") or Humanoid.Health <= 0 then
+			return
+		end
+
+		Humanoid.PlatformStand = true
+
+		for _, Part in Character:GetDescendants() do
+			if Part:IsA("BasePart") and not Part.Anchored then
+				Part.AssemblyLinearVelocity = Velocity
+			end
+		end
+
+		Root.AssemblyAngularVelocity = Velocity:Cross(Vector3.yAxis).Unit * TumbleSpeed
 	end)
 
 	local Backpack = LocalPlayer:FindFirstChildOfClass("Backpack")

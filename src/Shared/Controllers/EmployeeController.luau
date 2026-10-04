@@ -29,7 +29,17 @@ local FallbackModel = "Tie Guy"
 local RootName = "HumanoidRootPart"
 local HeadName = "Head"
 
-local InterpolationDelay = 0.2
+--> How far behind the server's clock the walk is drawn. It starts at StartDelay and then follows the
+--> worst lag seen over the last LagWindow seconds plus one server tick, so a connection that spikes
+--> is waited out rather than run dry of positions to draw between. It moves by at most DelayDrift
+--> seconds a second, a tenth of the walk's pace, which is too slow to read as a stumble.
+local StartDelay = 0.25
+local MinDelay = 0.15
+local MaxDelay = 1
+local TickGap = 0.1
+local DelayMargin = 0.05
+local LagWindow = 4
+local DelayDrift = 0.1
 local MaxSnapshots = 16
 local TurnSmoothing = 9
 
@@ -158,6 +168,10 @@ local EmployeeController = {
 	--> desk is built during that sweep, and a seat sound on each of them is the whole office
 	--> sitting down in the player's ear the moment they arrive.
 	Ready = false,
+
+	--> the playback delay in use, and the lag of every batch over the last LagWindow seconds
+	Delay = StartDelay,
+	Lags = {} :: { { At: number, Lag: number } },
 }
 
 local function GetContainer(): Folder
@@ -446,7 +460,7 @@ function EmployeeController:Add(Data: Spawn): Rendered?
 		Root = Root,
 		Prompt = Prompt,
 		Lift = Lift,
-		Snapshots = { { Time = os.clock(), Position = Data.Position } },
+		Snapshots = { { Time = workspace:GetServerTimeNow() - self.Delay, Position = Data.Position } },
 		Facing = Root.CFrame.LookVector * Vector3.new(1, 0, 1),
 	}
 
@@ -471,14 +485,14 @@ function EmployeeController:Remove(UID: number)
 	Employee.Model:Destroy()
 end
 
-function EmployeeController:SetTarget(UID: number, Position: Vector3)
+function EmployeeController:SetTarget(UID: number, Position: Vector3, Time: number)
 	local Employee = self.Employees[UID]
 
 	if not Employee then
 		return
 	end
 
-	table.insert(Employee.Snapshots, { Time = os.clock(), Position = Position })
+	table.insert(Employee.Snapshots, { Time = Time, Position = Position })
 
 	while #Employee.Snapshots > MaxSnapshots do
 		table.remove(Employee.Snapshots, 1)
@@ -776,8 +790,36 @@ function EmployeeController:Payday()
 	SoundController:PlayAt("EmployeePay", Earners[self.PayCursor].Seat.Position)
 end
 
+--> One batch's lag: how long after the server stepped the walk it reached this client, clock sync
+--> error included, which is fine since the delay only needs to be bigger than it.
+function EmployeeController:NoteLag(Lag: number)
+	local Now = os.clock()
+
+	table.insert(self.Lags, { At = Now, Lag = Lag })
+
+	while self.Lags[1].At < Now - LagWindow do
+		table.remove(self.Lags, 1)
+	end
+end
+
+--> Walks the delay toward the worst recent lag and one tick past it, never faster than DelayDrift.
+function EmployeeController:UpdateDelay(Delta: number): number
+	local Worst = 0
+
+	for _, Entry in self.Lags do
+		Worst = math.max(Worst, Entry.Lag)
+	end
+
+	local Target = math.clamp(Worst + TickGap + DelayMargin, MinDelay, MaxDelay)
+	local Drift = DelayDrift * Delta
+
+	self.Delay += math.clamp(Target - self.Delay, -Drift, Drift)
+
+	return self.Delay
+end
+
 function EmployeeController:Step(Delta: number, Parts: { BasePart }, CFrames: { CFrame })
-	local RenderTime = os.clock() - InterpolationDelay
+	local RenderTime = workspace:GetServerTimeNow() - self:UpdateDelay(Delta)
 	local TurnBlend = 1 - math.exp(-TurnSmoothing * Delta)
 
 	table.clear(Parts)
@@ -828,8 +870,10 @@ function EmployeeController:Start()
 	end)
 
 	NetworkingClient.Employees.Moved.On(function(Batch)
-		for _, Update in Batch do
-			self:SetTarget(Update.UID, Update.Position)
+		self:NoteLag(workspace:GetServerTimeNow() - Batch.Time)
+
+		for _, Update in Batch.Steps do
+			self:SetTarget(Update.UID, Update.Position, Batch.Time)
 		end
 	end)
 

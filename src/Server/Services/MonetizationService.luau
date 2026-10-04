@@ -237,9 +237,7 @@ function MonetizationService:GrantPass(Player: Player, Data: any, Key: string): 
 		ApplyWalkSpeed(Player, Data)
 	end
 
-	if Passes.Founder then
-		Tag(Player, "FOUNDER")
-	elseif Passes.VIP then
+	if Passes.VIP then
 		Tag(Player, "VIP")
 	end
 
@@ -359,8 +357,6 @@ function MonetizationService:_SyncPasses(Player: Player, Data: any)
 	for _, Key in Store.BundledPasses() do
 		self:_SyncPass(Player, Data, Key)
 	end
-
-	self:_SyncPass(Player, Data, "Founder")
 end
 
 function MonetizationService:_SyncPass(Player: Player, Data: any, Key: string)
@@ -410,9 +406,7 @@ function MonetizationService:_HandlePlayer(Player: Player)
 			Data.Store.StarterExpiresAt(os.time() + Store.StarterWindow)
 		end
 
-		if Store.Owns(Data, "Founder") then
-			Tag(Player, "FOUNDER")
-		elseif Store.Owns(Data, "VIP") then
+		if Store.Owns(Data, "VIP") then
 			Tag(Player, "VIP")
 		end
 

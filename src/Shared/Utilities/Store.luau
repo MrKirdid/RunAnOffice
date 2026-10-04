@@ -86,12 +86,11 @@ for _, Entry in Products.Layout do
 	end
 end
 
---> Passes are what Everything is made of: every entry drawn as a pass, apart from Everything
---> itself and Founder, which is bought on its own.
+--> Passes are what Everything is made of: every entry drawn as a pass, apart from Everything itself.
 local BundledPasses: { string } = {}
 
 for _, Entry in Products.Layout do
-	if Entry.Kind == "Pass" and Entry.Key and Entry.Key ~= "Everything" and Entry.Key ~= "Founder" then
+	if Entry.Kind == "Pass" and Entry.Key and Entry.Key ~= "Everything" then
 		table.insert(BundledPasses, Entry.Key)
 	end
 end

@@ -153,6 +153,10 @@ export type Visiting_Desk = { Floor: number, Slot: number, Computer: string?, Ke
 export type Employees_UID = number
 export type Employees_Position = Vector3
 export type Employees_Spawn = { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? }
+export type Gears_Fx = ("Swing" | "Bonk" | "Blast" | "Splat" | "Snap" | "Gulp" | "Cloak")
+export type Leaderboards_Board = ("Cash" | "Playtime")
+export type Leaderboards_Entry = { UserId: number, Name: string, Value: number }
+export type Leaderboards_Standings = { Board: ("Cash" | "Playtime"), Entries: { { UserId: number, Name: string, Value: number } } }
 
 
 
@@ -182,6 +186,8 @@ return {
 	Gears = {
 	},
 	Rewards = {
+	},
+	Leaderboards = {
 	},
 
 }

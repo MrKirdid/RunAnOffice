@@ -587,7 +587,8 @@ function ShopController:_FillCard(Card: ImageButton, Entry: Entry)
 	self:_BindBuy(OfferOf(Entry), Child(Card, "GreenButton") :: ImageButton, Card)
 end
 
---> A cash card: one big number, which for a skip is the cash it is worth right now.
+--> A cash card: one big line, which for a skip is the cash it is worth right now, for the ladder is
+--> the next rung and for anything else is its title.
 function ShopController:_FillCashCard(Card: ImageButton, Entry: Entry)
 	local Titles = Labels(Card, IsTitle)
 	local Icon = Card:FindFirstChild("TitleIcon")
@@ -601,6 +602,11 @@ function ShopController:_FillCashCard(Card: ImageButton, Entry: Entry)
 	if Icon and Icon:IsA("ImageLabel") then
 		Icon.Image = IconOf(Entry)
 		UIFx.Bob(Icon)
+	end
+
+	if Entry.Rungs then
+		self:_FillLadder(Card, Entry)
+		return
 	end
 
 	if Entry.Hours then

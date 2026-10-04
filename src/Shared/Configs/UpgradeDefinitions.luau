@@ -120,14 +120,22 @@ local Definitions: { [string]: Definition } = {
 	--> Master Rolling
 	MegaRoller = { Effect = "Rolls spin 25% faster", OnPurchase = AddMultiplier("RollSpeed", 0.25) },
 
+	--> Pads: the chain off the right of Exit is the early game's, one pad each, spaced from the
+	--> first minute to the first hour: pads 2 to 6. Its first node is the tutorial's free one. The
+	--> three late roller nodes fill the plot out to its nine.
+	RollerI = { Effect = "+1 roll pad", OnPurchase = AddPads(1) },
+	RollerII = { Effect = "+1 roll pad", OnPurchase = AddPads(1) },
+	RollerIII = { Effect = "+1 roll pad", OnPurchase = AddPads(1) },
+	RollerIV = { Effect = "+1 roll pad", OnPurchase = AddPads(1) },
+	RollerV = { Effect = "+1 roll pad", OnPurchase = AddPads(1) },
 	--> More Rollers
-	HypeRoller = { Effect = "+2 roll pads", OnPurchase = AddPads(2) },
+	HypeRoller = { Effect = "+1 roll pad", OnPurchase = AddPads(1) },
 	--> Even More Rollers
-	NewNode6 = { Effect = "+2 roll pads", OnPurchase = AddPads(2) },
+	NewNode6 = { Effect = "+1 roll pad", OnPurchase = AddPads(1) },
 	--> Super Many Rollers
-	GigaRoller = { Effect = "+2 roll pads", OnPurchase = AddPads(2) },
-	--> Final Roller
-	NewNode8 = { Effect = "+2 roll pads", OnPurchase = AddPads(2) },
+	GigaRoller = { Effect = "+1 roll pad", OnPurchase = AddPads(1) },
+	--> Turbo Rolls, which was the last pad node until the chain above took the early ones
+	NewNode8 = { Effect = "Rolls spin 50% faster", OnPurchase = AddMultiplier("RollSpeed", 0.5) },
 
 	--> Defense: the purple branch. Stealing is in, but what defense does against it is not yet, so
 	--> this only banks the level for BaseLockingService to read once it is.

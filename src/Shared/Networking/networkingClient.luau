@@ -191,11 +191,19 @@ Queue.Reliable[26] = table.create(256)
 Queue.Reliable[27] = table.create(256)
 Queue.Reliable[29] = table.create(256)
 Queue.Reliable[30] = table.create(256)
+Queue.Reliable[31] = table.create(256)
+Queue.Reliable[32] = table.create(256)
+Queue.Reliable[33] = table.create(256)
+Queue.Reliable[34] = table.create(256)
 export type Player = Player
 export type Visiting_Desk = { Floor: number, Slot: number, Computer: string?, Keyboard: string?, Monitor: string?, Employee: string?, EmployeeName: string? }
 export type Employees_UID = number
 export type Employees_Position = Vector3
 export type Employees_Spawn = { UID: number, Name: string, Type: string, Cost: number, Position: Vector3, Owner: Player? }
+export type Gears_Fx = ("Swing" | "Bonk" | "Blast" | "Splat" | "Snap" | "Gulp" | "Cloak")
+export type Leaderboards_Board = ("Cash" | "Playtime")
+export type Leaderboards_Entry = { UserId: number, Name: string, Value: number }
+export type Leaderboards_Standings = { Board: ("Cash" | "Playtime"), Entries: { { UserId: number, Name: string, Value: number } } }
 function SerdesFunctions.WriteFUNCTION_DATA_Roll(Value: number, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 3 bytes
 	local BLOCK_START = Allocate(3)
@@ -831,14 +839,16 @@ function SerdesFunctions.Employees_ReadEVENT_Added(): ({ { UID: number, Name: st
 	return Value
 end
 
-function SerdesFunctions.Employees_ReadEVENT_Moved(): ({ { UID: number, Position: Vector3 } })
-	-- Read BLOCK: 1 bytes
-	local BLOCK_START = Read(1)
+function SerdesFunctions.Employees_ReadEVENT_Moved(): ({ Time: number, Steps: { { UID: number, Position: Vector3 } } })
+	-- Read BLOCK: 9 bytes
+	local BLOCK_START = Read(9)
+	local Value = {} :: any
+	Value.Time = buffer.readf64(RecieveBuffer, BLOCK_START + 0)
 	-- START ARRAY
-	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 8)
 	if Length < 1 then error(`Expected "Length" to be larger than 1, got {Length} instead.`) end
 	if Length > 255 then error(`Expected "Length" to be smaller than 255, got {Length} instead.`) end
-	local Value = table.create(Length)
+	Value.Steps = table.create(Length)
 		-- Read BLOCK: 16 bytes
 	local ARRAY_START_1 = Read(16 * Length)
 	for Index = 1, Length do
@@ -860,7 +870,7 @@ function SerdesFunctions.Employees_ReadEVENT_Moved(): ({ { UID: number, Position
 		ARRAY_START_1 += 4
 		local Z = buffer.readf32(RecieveBuffer, OPERATION_OFFSET_3)
 		Item_1.Position = Vector3.new(X, Y, Z)
-		table.insert(Value, Item_1)
+		table.insert(Value.Steps, Item_1)
 	end
 	-- END ARRAY
 	return Value
@@ -1131,10 +1141,71 @@ function SerdesFunctions.Gears_ReadEVENT_Hit(): (number)
 	return Value
 end
 
+function SerdesFunctions.Gears_ReadEVENT_Effect(): ({ Kind: ("Swing" | "Bonk" | "Blast" | "Splat" | "Snap" | "Gulp" | "Cloak"), At: Vector3, Direction: Vector3, Size: number, By: Player?, Target: Player? })
+	-- Read BLOCK: 29 bytes
+	local BLOCK_START = Read(29)
+	local Value = {} :: any
+	Value.Kind = true :: any
+	local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Index == 0 then
+		Value.Kind = "Swing"
+	elseif Index == 1 then
+		Value.Kind = "Bonk"
+	elseif Index == 2 then
+		Value.Kind = "Blast"
+	elseif Index == 3 then
+		Value.Kind = "Splat"
+	elseif Index == 4 then
+		Value.Kind = "Snap"
+	elseif Index == 5 then
+		Value.Kind = "Gulp"
+	elseif Index == 6 then
+		Value.Kind = "Cloak"
+	else
+		error(`Unexpected enum: {Index}`)
+	end
+	local X = buffer.readf32(RecieveBuffer, BLOCK_START + 1)
+	local Y = buffer.readf32(RecieveBuffer, BLOCK_START + 5)
+	local Z = buffer.readf32(RecieveBuffer, BLOCK_START + 9)
+	Value.At = Vector3.new(X, Y, Z)
+	X = buffer.readf32(RecieveBuffer, BLOCK_START + 13)
+	Y = buffer.readf32(RecieveBuffer, BLOCK_START + 17)
+	Z = buffer.readf32(RecieveBuffer, BLOCK_START + 21)
+	Value.Direction = Vector3.new(X, Y, Z)
+	Value.Size = buffer.readf32(RecieveBuffer, BLOCK_START + 25)
+	RecieveInstanceCursor += 1
+	if typeof(RecieveInstances[RecieveInstanceCursor]) == "Instance" then
+		RecieveInstanceCursor -= 1
+		RecieveInstanceCursor += 1
+		Value.By = RecieveInstances[RecieveInstanceCursor]
+		if typeof(Value.By) ~= "Instance" then error(`Expected an Instance, got {typeof(Value.By)} instead.`) end
+		if not Value.By:IsA("Player") then error(`Expected an Instance of type "Player", got "{Value.By.ClassName}" instead.`) end
+	end
+	RecieveInstanceCursor += 1
+	if typeof(RecieveInstances[RecieveInstanceCursor]) == "Instance" then
+		RecieveInstanceCursor -= 1
+		RecieveInstanceCursor += 1
+		Value.Target = RecieveInstances[RecieveInstanceCursor]
+		if typeof(Value.Target) ~= "Instance" then error(`Expected an Instance, got {typeof(Value.Target)} instead.`) end
+		if not Value.Target:IsA("Player") then error(`Expected an Instance of type "Player", got "{Value.Target.ClassName}" instead.`) end
+	end
+	return Value
+end
+
+function SerdesFunctions.Gears_ReadEVENT_Flung(): (Vector3)
+	-- Read BLOCK: 12 bytes
+	local BLOCK_START = Read(12)
+	local X = buffer.readf32(RecieveBuffer, BLOCK_START + 0)
+	local Y = buffer.readf32(RecieveBuffer, BLOCK_START + 4)
+	local Z = buffer.readf32(RecieveBuffer, BLOCK_START + 8)
+	local Value = Vector3.new(X, Y, Z)
+	return Value
+end
+
 function SerdesFunctions.Rewards_WriteFUNCTION_DATA_Claim(Value: nil, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 2 bytes
 	local BLOCK_START = Allocate(2)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 30)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 32)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
 end
 
@@ -1146,6 +1217,120 @@ function SerdesFunctions.Rewards_ReadFUNCTION_RETURN_Claim(): (number)
 		error("Server encountered an error.")
 	end
 	local Value = buffer.readf64(RecieveBuffer, BLOCK_START + 1)
+	return Value
+end
+
+function SerdesFunctions.Leaderboards_WriteFUNCTION_DATA_Get(Value: nil, InvocationIdentifier: number): ()
+	-- Allocate BLOCK: 2 bytes
+	local BLOCK_START = Allocate(2)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 33)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+end
+
+function SerdesFunctions.Leaderboards_ReadFUNCTION_RETURN_Get(): ({ { Board: ("Cash" | "Playtime"), Entries: { { UserId: number, Name: string, Value: number } } } })
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Success ~= 1 then
+		error("Server encountered an error.")
+	end
+	-- START ARRAY
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	if Length < 0 then error(`Expected "Length" to be larger than 0, got {Length} instead.`) end
+	if Length > 2 then error(`Expected "Length" to be smaller than 2, got {Length} instead.`) end
+	local Value = table.create(Length)
+		-- Read BLOCK: 2 bytes
+	local ARRAY_START_1 = Read(2 * Length)
+	for Index = 1, Length do
+		local Item_1 = {} :: any
+		Item_1.Board = true :: any
+		-- Read 1
+		local OPERATION_OFFSET_0 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		local Index = buffer.readu8(RecieveBuffer, OPERATION_OFFSET_0)
+		if Index == 0 then
+			Item_1.Board = "Cash"
+		elseif Index == 1 then
+			Item_1.Board = "Playtime"
+		else
+			error(`Unexpected enum: {Index}`)
+		end
+		-- START ARRAY
+		-- Read 1
+		local OPERATION_OFFSET_1 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		Length = buffer.readu8(RecieveBuffer, OPERATION_OFFSET_1)
+		if Length < 0 then error(`Expected "Length" to be larger than 0, got {Length} instead.`) end
+		if Length > 100 then error(`Expected "Length" to be smaller than 100, got {Length} instead.`) end
+		Item_1.Entries = table.create(Length)
+			-- Read BLOCK: 17 bytes
+		local ARRAY_START_2 = Read(17 * Length)
+		for Index = 1, Length do
+			local Item_2 = {} :: any
+			-- Read 8
+			local OPERATION_OFFSET_0 = ARRAY_START_2
+			ARRAY_START_2 += 8
+			Item_2.UserId = buffer.readf64(RecieveBuffer, OPERATION_OFFSET_0)
+			-- Read 1
+			local OPERATION_OFFSET_1 = ARRAY_START_2
+			ARRAY_START_2 += 1
+			Length = buffer.readu8(RecieveBuffer, OPERATION_OFFSET_1)
+			Item_2.Name = buffer.readstring(RecieveBuffer, Read(Length), Length)
+			if #Item_2.Name < 0 then error(`Expected length of "Item_2.Name" to be larger than 0, got {#Item_2.Name} instead.`) end
+			if #Item_2.Name > 40 then error(`Expected length of "Item_2.Name" to be smaller than 40, got {#Item_2.Name} instead.`) end
+			-- Read 8
+			local OPERATION_OFFSET_2 = ARRAY_START_2
+			ARRAY_START_2 += 8
+			Item_2.Value = buffer.readf64(RecieveBuffer, OPERATION_OFFSET_2)
+			table.insert(Item_1.Entries, Item_2)
+		end
+		-- END ARRAY
+		table.insert(Value, Item_1)
+	end
+	-- END ARRAY
+	return Value
+end
+
+function SerdesFunctions.Leaderboards_ReadEVENT_Update(): ({ Board: ("Cash" | "Playtime"), Entries: { { UserId: number, Name: string, Value: number } } })
+	-- Read BLOCK: 2 bytes
+	local BLOCK_START = Read(2)
+	local Value = {} :: any
+	Value.Board = true :: any
+	local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	if Index == 0 then
+		Value.Board = "Cash"
+	elseif Index == 1 then
+		Value.Board = "Playtime"
+	else
+		error(`Unexpected enum: {Index}`)
+	end
+	-- START ARRAY
+	local Length = buffer.readu8(RecieveBuffer, BLOCK_START + 1)
+	if Length < 0 then error(`Expected "Length" to be larger than 0, got {Length} instead.`) end
+	if Length > 100 then error(`Expected "Length" to be smaller than 100, got {Length} instead.`) end
+	Value.Entries = table.create(Length)
+		-- Read BLOCK: 17 bytes
+	local ARRAY_START_1 = Read(17 * Length)
+	for Index = 1, Length do
+		local Item_1 = {} :: any
+		-- Read 8
+		local OPERATION_OFFSET_0 = ARRAY_START_1
+		ARRAY_START_1 += 8
+		Item_1.UserId = buffer.readf64(RecieveBuffer, OPERATION_OFFSET_0)
+		-- Read 1
+		local OPERATION_OFFSET_1 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		Length = buffer.readu8(RecieveBuffer, OPERATION_OFFSET_1)
+		Item_1.Name = buffer.readstring(RecieveBuffer, Read(Length), Length)
+		if #Item_1.Name < 0 then error(`Expected length of "Item_1.Name" to be larger than 0, got {#Item_1.Name} instead.`) end
+		if #Item_1.Name > 40 then error(`Expected length of "Item_1.Name" to be smaller than 40, got {#Item_1.Name} instead.`) end
+		-- Read 8
+		local OPERATION_OFFSET_2 = ARRAY_START_1
+		ARRAY_START_1 += 8
+		Item_1.Value = buffer.readf64(RecieveBuffer, OPERATION_OFFSET_2)
+		table.insert(Value.Entries, Item_1)
+	end
+	-- END ARRAY
 	return Value
 end
 
@@ -1265,10 +1450,24 @@ if not RunService:IsRunning() then
 		Hit = {
 			On = NOOP
 		},
+		Effect = {
+			On = NOOP
+		},
+		Flung = {
+			On = NOOP
+		},
 	},
 	Rewards = {
 		Claim = {
 			Invoke = NOOP
+		},
+	},
+	Leaderboards = {
+		Get = {
+			Invoke = NOOP
+		},
+		Update = {
+			On = NOOP
 		},
 	},
 	})
@@ -1484,7 +1683,7 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 				table.insert(Queue.Reliable[15], {Value} :: {any})
 			end
 		elseif Index == 16 then
-			local Value: { { UID: number, Position: Vector3 } } = SerdesFunctions.Employees_ReadEVENT_Moved()
+			local Value: { Time: number, Steps: { { UID: number, Position: Vector3 } } } = SerdesFunctions.Employees_ReadEVENT_Moved()
 			if Events.Reliable[16] ~= nil then
 				task.spawn(Events.Reliable[16], Value)
 			else
@@ -1622,6 +1821,26 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 				table.insert(Queue.Reliable[29], {Value} :: {any})
 			end
 		elseif Index == 30 then
+			local Value: { Kind: ("Swing" | "Bonk" | "Blast" | "Splat" | "Snap" | "Gulp" | "Cloak"), At: Vector3, Direction: Vector3, Size: number, By: Player?, Target: Player? } = SerdesFunctions.Gears_ReadEVENT_Effect()
+			if Events.Reliable[30] ~= nil then
+				task.spawn(Events.Reliable[30], Value)
+			else
+				if #Queue.Reliable[30] > 256 then
+					warn("[Blink]: Event queue of \"Effect\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[30], {Value} :: {any})
+			end
+		elseif Index == 31 then
+			local Value: Vector3 = SerdesFunctions.Gears_ReadEVENT_Flung()
+			if Events.Reliable[31] ~= nil then
+				task.spawn(Events.Reliable[31], Value)
+			else
+				if #Queue.Reliable[31] > 256 then
+					warn("[Blink]: Event queue of \"Flung\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[31], {Value} :: {any})
+			end
+		elseif Index == 32 then
 			-- Read BLOCK: 1 bytes
 			local BLOCK_START = Read(1)
 			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
@@ -1631,6 +1850,27 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 			if Calls[InvocationIdentifier] ~= nil then
 				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
 				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 33 then
+			-- Read BLOCK: 1 bytes
+			local BLOCK_START = Read(1)
+			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+				local Success, ReturnValue = pcall(function ()
+					return SerdesFunctions.Leaderboards_ReadFUNCTION_RETURN_Get()
+				end)
+			if Calls[InvocationIdentifier] ~= nil then
+				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
+				Calls[InvocationIdentifier] = nil
+			end
+		elseif Index == 34 then
+			local Value: { Board: ("Cash" | "Playtime"), Entries: { { UserId: number, Name: string, Value: number } } } = SerdesFunctions.Leaderboards_ReadEVENT_Update()
+			if Events.Reliable[34] ~= nil then
+				task.spawn(Events.Reliable[34], Value)
+			else
+				if #Queue.Reliable[34] > 256 then
+					warn("[Blink]: Event queue of \"Update\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[34], {Value} :: {any})
 			end
 		end
 	end
@@ -1975,7 +2215,7 @@ local Returns = table.freeze({
 			end
 		},
 		Moved = {
-			On = function(Listener: (Value: { { UID: number, Position: Vector3 } }) -> ()): () -> ()
+			On = function(Listener: (Value: { Time: number, Steps: { { UID: number, Position: Vector3 } } }) -> ()): () -> ()
 				Events.Reliable[16] = Listener
 				for Index, Arguments in Queue.Reliable[16] do
 					task.spawn(Listener, table.unpack(Arguments))
@@ -2235,6 +2475,34 @@ local Returns = table.freeze({
 				end
 			end
 		},
+		Effect = {
+			On = function(Listener: (Value: { Kind: ("Swing" | "Bonk" | "Blast" | "Splat" | "Snap" | "Gulp" | "Cloak"), At: Vector3, Direction: Vector3, Size: number, By: Player?, Target: Player? }) -> ()): () -> ()
+				Events.Reliable[30] = Listener
+				for Index, Arguments in Queue.Reliable[30] do
+					task.spawn(Listener, table.unpack(Arguments))
+				end
+				Queue.Reliable[30] = {}
+				return function (): ()
+					if Events.Reliable[30] == Listener then
+						Events.Reliable[30] = nil
+					end
+				end
+			end
+		},
+		Flung = {
+			On = function(Listener: (Value: Vector3) -> ()): () -> ()
+				Events.Reliable[31] = Listener
+				for Index, Arguments in Queue.Reliable[31] do
+					task.spawn(Listener, table.unpack(Arguments))
+				end
+				Queue.Reliable[31] = {}
+				return function (): ()
+					if Events.Reliable[31] == Listener then
+						Events.Reliable[31] = nil
+					end
+				end
+			end
+		},
 	},
 	Rewards = {
 		Claim = {
@@ -2257,6 +2525,44 @@ local Returns = table.freeze({
 					end
 					Resolve(ReturnValue)
 				end)
+			end
+		},
+	},
+	Leaderboards = {
+		Get = {
+			Invoke = function(Value: nil)
+				return Promise.new(function (Resolve, Reject, OnCancel)
+					local InvocationIdentifier = Invoke()
+					if Calls[InvocationIdentifier] ~= nil then
+						Invocations -= 1
+						error("More than 256 calls are awaiting a response, this packet has been dropped.")
+					end
+					SerdesFunctions.Leaderboards_WriteFUNCTION_DATA_Get(Value, InvocationIdentifier)
+					Calls[InvocationIdentifier] = coroutine.running()
+					OnCancel(function ()
+						Calls[InvocationIdentifier] = nil
+					end)
+					local Success, ReturnValue: { { Board: ("Cash" | "Playtime"), Entries: { { UserId: number, Name: string, Value: number } } } } = coroutine.yield()
+					if Success ~= true then
+						Reject("There was an exception while processing \"Get\".")
+						return 
+					end
+					Resolve(ReturnValue)
+				end)
+			end
+		},
+		Update = {
+			On = function(Listener: (Value: { Board: ("Cash" | "Playtime"), Entries: { { UserId: number, Name: string, Value: number } } }) -> ()): () -> ()
+				Events.Reliable[34] = Listener
+				for Index, Arguments in Queue.Reliable[34] do
+					task.spawn(Listener, table.unpack(Arguments))
+				end
+				Queue.Reliable[34] = {}
+				return function (): ()
+					if Events.Reliable[34] == Listener then
+						Events.Reliable[34] = nil
+					end
+				end
 			end
 		},
 	},

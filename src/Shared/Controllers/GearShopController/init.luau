@@ -269,7 +269,7 @@ function GearShopController:_Refresh()
 	if Title then
 		local Count, Slots = GearController:GetSlots()
 
-		Title.Text = `{TitleText}  {Count}/{Slots}`
+		Title.Text = `{TitleText}  ({Count}/{Slots} equipped)`
 	end
 end
 

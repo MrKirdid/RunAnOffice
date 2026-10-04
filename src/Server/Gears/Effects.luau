@@ -1,13 +1,16 @@
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local ServerScriptService = game:GetService("ServerScriptService")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
 
+local AntiCheatService = require(ServerScriptService.Server.Services.AntiCheatService)
 local GearConfigs = require(Shared.Configs.Gears)
 local NetworkingServer = require(Shared.Networking.networkingServer)
+local NetworkingTypes = require(Shared.Networking.networkingTypes)
 local SoundConfigs = require(Shared.Configs.Sounds)
 local StatusService = require(ServerScriptService.Server.Services.StatusService)
 local StealingService = require(ServerScriptService.Server.Services.StealingService)
@@ -28,6 +31,9 @@ export type Context = {
 }
 
 type Effect = (Context: Context) -> ()
+
+--> the look of each, in Shared.VFX.Gears
+type Fx = NetworkingTypes.Gears_Fx
 
 --> A swing reaches this far, and only counts in front: the dot of the two directions past this.
 local SwingRange = 9
@@ -53,11 +59,11 @@ local TNTFuse = 2
 local TNTRadius = 22
 local TNTPower = 53
 
---> the blast's lift over its sideways push, so nobody is shoved along the floor, and the kick.
+--> the blast's lift over its sideways push, so nobody is shoved along the floor. The camera kick is
+--> each client's own, off how close it stood.
 --> A blast throws whoever is at its centre (2 * BlastLift * Power ^ 2 / gravity) studs and the
 --> edge a quarter of that: the tnt about 20 at the centre, the bomb about 12.
 local BlastLift = 0.7
-local BlastShake = 2
 
 --> goo: the ball thrown, how long it may fly before it splats on its own, the puddle it leaves,
 --> how long that lies there, how slow it makes you and for how long after a touch
@@ -92,18 +98,11 @@ local PotionTime = 15
 
 local CloakTime = 10
 
---> how long a burst of particles is switched on for: Emit does not replicate, Enabled does
-local BurstTime = 0.15
-
 --> the fuse: how many sparks a second and the light they throw, and how fast a thrown stick tumbles
 local SparkRate = 45
 local SparkColor = Color3.fromRGB(255, 190, 80)
 local FuseLight = 6
 local TumbleSpeed = 14
-
---> the smoke a blast leaves and the sparks a trap throws
-local SmokeColor = Color3.fromRGB(90, 90, 95)
-local BonkColor = Color3.fromRGB(255, 240, 150)
 
 --> the slowed: tinted green for as long as the goo has them
 local GooTint = Color3.fromRGB(110, 230, 80)
@@ -205,30 +204,6 @@ local function Kick(Player: Player, Strength: number)
 	NetworkingServer.Gears.Hit.Fire(Player, Strength)
 end
 
---> A puff of particles in a colour, switched on for a moment. Enabled replicates; Emit does not.
-local function Puff(Part: BasePart, Color: Color3, Rate: number, Size: number, Speed: number)
-	local Emitter = Instance.new("ParticleEmitter")
-	Emitter.Color = ColorSequence.new(Color)
-	Emitter.Rate = Rate
-	Emitter.Lifetime = NumberRange.new(0.4, 0.8)
-	Emitter.Speed = NumberRange.new(Speed * 0.5, Speed)
-	Emitter.SpreadAngle = Vector2.new(180, 180)
-	Emitter.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, Size),
-		NumberSequenceKeypoint.new(1, 0),
-	})
-	Emitter.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.1),
-		NumberSequenceKeypoint.new(1, 1),
-	})
-	Emitter.Enabled = true
-	Emitter.Parent = Part
-
-	task.delay(BurstTime, function()
-		Emitter.Enabled = false
-	end)
-end
-
 --> Sparks off a lit thing, and a light with them, for as long as it is there.
 local function Sparks(Part: BasePart)
 	local Emitter = Instance.new("ParticleEmitter")
@@ -252,21 +227,17 @@ local function Sparks(Part: BasePart)
 	Light.Parent = Part
 end
 
---> A puff at a spot with no part at it: a clear anchored one is stood there for the burst.
-local function PuffAt(Position: Vector3, Color: Color3, Rate: number, Size: number, Speed: number)
-	local Holder = Instance.new("Part")
-	Holder.Name = "Puff"
-	Holder.Size = Vector3.one
-	Holder.Transparency = 1
-	Holder.Anchored = true
-	Holder.CanCollide = false
-	Holder.CanQuery = false
-	Holder.CanTouch = false
-	Holder.Position = Position
-	Holder.Parent = GetFolder()
-
-	Puff(Holder, Color, Rate, Size, Speed)
-	Debris:AddItem(Holder, 2)
+--> What it looked like, sent to every client to draw: Shared.VFX.Gears is the look of each Kind.
+--> Nothing about what the gear did rides on this; that is all done here before it goes out.
+local function Show(Kind: Fx, At: Vector3, Direction: Vector3, Size: number, By: Player?, Target: Player?)
+	NetworkingServer.Gears.Effect.FireAll({
+		Kind = Kind,
+		At = At,
+		Direction = Direction,
+		Size = Size,
+		By = By,
+		Target = Target,
+	})
 end
 
 --> The slowed wear the goo for as long as it has them.
@@ -312,22 +283,14 @@ local function Blast(_Owner: Player, Position: Vector3, Radius: number, Power: n
 		local Falloff = 1 - (Distance / Radius) * 0.5
 
 		StatusService:Fling(Other, (Direction + Vector3.new(0, BlastLift, 0)) * Power * Falloff)
-		Kick(Other, BlastShake * Falloff)
 	end
 end
 
---> The bang itself: an explosion that pushes nothing and breaks nothing, for the look, the sound
---> played at the spot, and the throw done by hand around it.
+--> The bang itself: the look on every client, the sound played at the spot, and the throw done by
+--> hand around it. Every client kicks its own camera off how close it stood.
 local function Explode(Owner: Player, Position: Vector3, Radius: number, Power: number)
-	local Explosion = Instance.new("Explosion")
-	Explosion.Position = Position
-	Explosion.BlastRadius = Radius
-	Explosion.BlastPressure = 0
-	Explosion.DestroyJointRadiusPercent = 0
-	Explosion.Parent = workspace
-
 	PlaySound("Explode", Position)
-	PuffAt(Position, SmokeColor, 400, Radius * 0.35, Radius * 0.9)
+	Show("Blast", Position, Vector3.yAxis, Radius, Owner)
 	Blast(Owner, Position, Radius, Power)
 end
 
@@ -371,14 +334,21 @@ local function BuildPart(Name: string, Size: Vector3, Color: Color3): Part
 	return Part
 end
 
---> Everything a cast for walls and floors should see through: every character, and whatever the
---> gears have left lying about.
-local function WorldParams(): RaycastParams
+--> Everything a cast for walls and floors should see through: whatever the gears have left lying
+--> about, the floors of every plot its owner has not bought, which stand solid here and on nobody's
+--> screen, and every character unless the cast is looking for them.
+local function WorldParams(HitCharacters: boolean?): RaycastParams
 	local Ignore: { Instance } = { GetFolder() }
 
-	for _, Other in Players:GetPlayers() do
-		if Other.Character then
-			table.insert(Ignore, Other.Character)
+	for _, Hidden in AntiCheatService.Hidden do
+		table.move(Hidden, 1, #Hidden, #Ignore + 1, Ignore)
+	end
+
+	if not HitCharacters then
+		for _, Other in Players:GetPlayers() do
+			if Other.Character then
+				table.insert(Ignore, Other.Character)
+			end
 		end
 	end
 
@@ -398,6 +368,33 @@ local function GroundBelow(Position: Vector3): Vector3?
 	return if Result then Result.Position else nil
 end
 
+--> Follows something thrown along the path it actually flew, frame by frame, and calls OnHit with the
+--> first thing it passed through. Thrown things never collide: physics against the server's copy of
+--> the world bounced them off the unbought floors nobody else can see and stuck them there in mid
+--> air. The cast leaves those floors out; an invisible wall that is solid, a locked base's door,
+--> still stops it.
+local function Track(Part: BasePart, Params: RaycastParams, OnHit: (Result: RaycastResult) -> ())
+	local Last = Part.Position
+	local Connection: RBXScriptConnection
+
+	Connection = RunService.Heartbeat:Connect(function()
+		if not Part.Parent then
+			Connection:Disconnect()
+			return
+		end
+
+		local Now = Part.Position
+		local Result = if Now ~= Last then workspace:Raycast(Last, Now - Last, Params) else nil
+
+		Last = Now
+
+		if Result then
+			Connection:Disconnect()
+			OnHit(Result)
+		end
+	end)
+end
+
 --> The aim as sent, if it is a real point: the client can send anything, and a NaN or an infinity
 --> would turn into a velocity nobody could aim.
 local function CleanAim(Aim: Vector3?): Vector3?
@@ -411,7 +408,8 @@ end
 --> Something thrown from the hand so that it comes down on the aim: timed off how far away that is
 --> at about Speed across the ground, and lifted by exactly what gravity takes back over that time.
 --> An aim past MaxThrowTime of flight is brought in to that. Nothing to aim at is a lob straight
---> ahead. The server keeps the part so the throw lands where it was thrown.
+--> ahead. The server keeps the part so the throw lands where it was thrown, and it collides with
+--> nothing: Track is what finds where it comes down.
 local function Throw(Context: Context, Part: BasePart, Speed: number, Lift: number)
 	local Forward = Context.Root.CFrame.LookVector
 	local Origin = Context.Root.Position + Forward * 2
@@ -437,7 +435,9 @@ local function Throw(Context: Context, Part: BasePart, Speed: number, Lift: numb
 		Velocity = Flat / Time + Vector3.new(0, Offset.Y / Time + workspace.Gravity * Time / 2, 0)
 	end
 
+	Part.CanCollide = false
 	Part.CanQuery = false
+	Part.CanTouch = false
 	Part.Position = Origin
 	Part.AssemblyLinearVelocity = Velocity
 	Part.AssemblyAngularVelocity = Vector3.new(Draw:NextNumber(-1, 1), Draw:NextNumber(-1, 1), Draw:NextNumber(-1, 1))
@@ -466,12 +466,14 @@ local function Fuse(Owner: Player, Part: BasePart, Seconds: number, Radius: numb
 	end)
 end
 
-local function Swing(Power: number): Effect
+--> Size is how big the swing and the hit look, 1 for the wooden bat.
+local function Swing(Power: number, Size: number): Effect
 	return function(Context: Context)
 		local Forward = Context.Root.CFrame.LookVector
 		local Origin = Context.Root.Position
 
 		PlaySound("Swing", Context.Root)
+		Show("Swing", Origin, Forward, Size, Context.Player)
 
 		for _, Other in Players:GetPlayers() do
 			if Other == Context.Player then
@@ -508,7 +510,7 @@ local function Swing(Power: number): Effect
 			StealingService:Caught(Other)
 
 			PlaySound("Bonk", Root)
-			Puff(Root, BonkColor, 250, 0.7, 12)
+			Show("Bonk", Root.Position, Flat.Unit, Size, Context.Player, Other)
 			Kick(Other, SwingShake)
 		end
 	end
@@ -569,8 +571,8 @@ end
 
 local Effects: { [string]: Effect } = {}
 
-Effects.WoodenBat = Swing(WoodenPower)
-Effects.SteelBat = Swing(SteelPower)
+Effects.WoodenBat = Swing(WoodenPower, GearConfigs.List.WoodenBat.Swing or 1)
+Effects.SteelBat = Swing(SteelPower, GearConfigs.List.SteelBat.Swing or 1)
 
 Effects.Bomb = function(Context: Context)
 	local Bomb = BuildFromGear("Bomb", Vector3.new(2, 2, 2), Color3.fromRGB(30, 30, 35))
@@ -589,26 +591,22 @@ end
 
 Effects.TNT = function(Context: Context)
 	local Stick = BuildFromGear("TNT", Vector3.new(1.5, 2, 1.5), Color3.fromRGB(220, 50, 40))
-	local Stuck = false
-
-	--> It stops dead on the first solid thing it hits, so it goes off where it was thrown rather
-	--> than bouncing on from it. A player it hits is not something to stick to.
-	Stick.Touched:Connect(function(Hit: BasePart)
-		if Stuck or not Hit.CanCollide or GetToucher(Hit) or Hit:IsDescendantOf(GetFolder()) then
-			return
-		end
-
-		Stuck = true
-		Stick.Anchored = true
-	end)
 
 	Throw(Context, Stick, ThrowSpeed, ThrowLift)
+
+	--> It stops dead on the first thing it comes down on, stood up on it, so it goes off where it
+	--> was thrown rather than rolling on. Players are thrown past, not stuck to.
+	Track(Stick, WorldParams(), function(Hit: RaycastResult)
+		Stick.Anchored = true
+		Stick.CFrame = CFrame.new(Hit.Position + Hit.Normal * Stick.Size.Y / 2) * Context.Root.CFrame.Rotation
+	end)
+
 	Fuse(Context.Player, Stick, TNTFuse, TNTRadius, TNTPower)
 end
 
 --> The puddle where the ball came down: spread out from nothing, and slowing whoever is not the
 --> one who threw it, from the last step in.
-local function Splat(Owner: Player, Position: Vector3)
+local function Splat(Owner: Player, Position: Vector3, Target: Player?)
 	local Puddle = BuildPart("Goo", Vector3.new(GooSize.Y, 0.2, 0.2), Color3.fromRGB(90, 230, 60))
 	Puddle.Shape = Enum.PartType.Cylinder
 	Puddle.CFrame = CFrame.new(Position) * CFrame.Angles(0, 0, math.pi / 2)
@@ -619,7 +617,7 @@ local function Splat(Owner: Player, Position: Vector3)
 	Puddle.Parent = GetFolder()
 
 	PlaySound("Splat", Puddle)
-	Puff(Puddle, Color3.fromRGB(120, 240, 80), 300, 0.9, 14)
+	Show("Splat", Position, Vector3.yAxis, 1, Owner, Target)
 
 	TweenService:Create(Puddle, SplatTween, { Size = Vector3.new(GooSize.Y, GooSize.X, GooSize.Z) }):Play()
 
@@ -642,12 +640,11 @@ Effects.Goo = function(Context: Context)
 	local Ball = BuildPart("GooBall", Vector3.new(1.6, 1.6, 1.6), Color3.fromRGB(90, 230, 60))
 	Ball.Shape = Enum.PartType.Ball
 	Ball.Material = Enum.Material.Neon
-	Ball.CanTouch = true
 
 	local Owner = Context.Player
 	local Landed = false
 
-	local function Land(At: Vector3)
+	local function Land(At: Vector3, Target: Player?)
 		if Landed then
 			return
 		end
@@ -655,15 +652,22 @@ Effects.Goo = function(Context: Context)
 		Landed = true
 
 		Ball:Destroy()
-		Splat(Owner, At)
+		Splat(Owner, At, Target)
 	end
 
-	Ball.Touched:Connect(function(Hit: BasePart)
-		local Other = GetToucher(Hit)
+	Throw(Context, Ball, GooSpeed, GooLift)
 
-		if Other == Owner or Hit:IsDescendantOf(GetFolder()) then
-			return
-		end
+	--> every character but the thrower's own is something to hit
+	local Params = WorldParams(true)
+	local Filter = Params.FilterDescendantsInstances
+
+	if Owner.Character then
+		table.insert(Filter, Owner.Character)
+		Params.FilterDescendantsInstances = Filter
+	end
+
+	Track(Ball, Params, function(Hit: RaycastResult)
+		local Other = GetToucher(Hit.Instance :: BasePart)
 
 		if Other then
 			StatusService:Set(Other, "Goo", GooFactor, GooSlow)
@@ -672,10 +676,8 @@ Effects.Goo = function(Context: Context)
 		end
 
 		--> the puddle lies on the floor under where the ball hit, a wall or a player included
-		Land(GroundBelow(Ball.Position) or Ball.Position - Vector3.new(0, Ball.Size.Y / 2, 0))
+		Land(GroundBelow(Hit.Position) or Hit.Position, Other)
 	end)
-
-	Throw(Context, Ball, GooSpeed, GooLift)
 
 	task.delay(GooFlight, function()
 		if Ball.Parent then
@@ -716,7 +718,7 @@ Effects.Trap = function(Context: Context)
 		Kick(Other, TrapShake)
 
 		PlaySound("Snap", Plate.Position)
-		PuffAt(Plate.Position, SmokeColor, 300, 0.5, 10)
+		Show("Snap", Plate.Position, Vector3.yAxis, 1, Owner, Other)
 
 		if Root then
 			PlaySound("Freeze", Root)
@@ -731,7 +733,7 @@ end
 Effects.SpeedPotion = function(Context: Context)
 	StatusService:Set(Context.Player, "Potion", PotionFactor, PotionTime)
 	PlaySound("Gulp", Context.Root)
-	Puff(Context.Root, Color3.fromRGB(255, 220, 90), 200, 0.6, 10)
+	Show("Gulp", Context.Root.Position, Vector3.yAxis, 1, Context.Player, Context.Player)
 end
 
 --> Heard going and heard coming back, so the ones around know to look again.
@@ -740,13 +742,14 @@ Effects.InvisibilityCloak = function(Context: Context)
 
 	StatusService:Hide(Player, CloakTime)
 	PlaySound("Cloak", Context.Root)
-	Puff(Context.Root, Color3.fromRGB(180, 140, 255), 250, 0.8, 12)
+	Show("Cloak", Context.Root.Position, Vector3.yAxis, 1, Player)
 
 	task.delay(CloakTime, function()
 		local Root = GetRoot(Player)
 
 		if Root then
 			PlaySound("Cloak", Root)
+			Show("Cloak", Root.Position, Vector3.yAxis, 1, Player)
 		end
 	end)
 end

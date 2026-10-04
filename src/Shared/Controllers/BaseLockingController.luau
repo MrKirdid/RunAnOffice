@@ -83,6 +83,12 @@ local function SecondsLeft(Until: number): number
 	return math.max(0, math.ceil(Until - workspace:GetServerTimeNow()))
 end
 
+--> Empty while the door is open. The label ships saying "Cooldown: 60s", so a copy of it that is
+--> never written to stands by the door saying so forever.
+local function LabelText(Door: Door): string
+	return if Door.Locked then string.format(LabelFormat, SecondsLeft(GetUntil(Door.Plot))) else ""
+end
+
 --> The beams fade rather than flick, and the sound comes from the door rather than the head:
 --> everyone near enough hears which base just shut.
 function BaseLockingController:SetShown(Door: Door, Shown: boolean, Announce: boolean)
@@ -95,7 +101,7 @@ function BaseLockingController:SetShown(Door: Door, Shown: boolean, Announce: bo
 	end
 
 	if Door.Label then
-		Door.Label.Text = if Shown then string.format(LabelFormat, SecondsLeft(GetUntil(Door.Plot))) else ""
+		Door.Label.Text = LabelText(Door)
 	end
 
 	if Announce and Door.Wall then
@@ -130,9 +136,11 @@ function BaseLockingController:WatchPlot(Plot: Model)
 		Locked = nil,
 	}
 
-	--> The lasers arrive a piece at a time for a player who joins after the plot was made, so
-	--> the beams and the label are taken as they come rather than read once and missed: a beam
-	--> read too early was one that never lit, and a label never found was a countdown nobody saw.
+	--> The lasers arrive a piece at a time for a player who joins after the plot was made, and
+	--> streaming takes them away and hands back fresh copies every time the player walks off and
+	--> back, so the beams and the label are taken as they come rather than read once: a beam read
+	--> too early was one that never lit, and a label kept from before was a dead copy while the new
+	--> one stood by the door with the template's countdown on it long after the lock was over.
 	local function Adopt(Object: Instance)
 		if Object.Name == BeamName and Object:IsA("BasePart") and Object.Parent == Lasers then
 			table.insert(Door.Beams, Object)
@@ -146,15 +154,13 @@ function BaseLockingController:WatchPlot(Plot: Model)
 
 		if Object.Name == WallName and Object:IsA("BasePart") and Object.Parent == Lasers then
 			Door.Wall = Object
+			Door.Label = nil
 			return
 		end
 
-		if Object:IsA("TextLabel") and not Door.Label and Door.Wall and Object:IsDescendantOf(Door.Wall) then
+		if Object:IsA("TextLabel") and Door.Wall and Object:IsDescendantOf(Door.Wall) then
 			Door.Label = Object
-
-			if Door.Locked then
-				Object.Text = string.format(LabelFormat, SecondsLeft(GetUntil(Plot)))
-			end
+			Object.Text = LabelText(Door)
 		end
 	end
 
@@ -163,6 +169,15 @@ function BaseLockingController:WatchPlot(Plot: Model)
 	end
 
 	Lasers.DescendantAdded:Connect(Adopt)
+
+	--> a beam streamed out is gone for good; its replacement comes back through Adopt
+	Lasers.DescendantRemoving:Connect(function(Object: Instance)
+		local Index = table.find(Door.Beams, Object :: BasePart)
+
+		if Index then
+			table.remove(Door.Beams, Index)
+		end
+	end)
 
 	self.Doors[Plot] = Door
 	self:Refresh(Door, false)
@@ -273,7 +288,7 @@ function BaseLockingController:Step(Delta: number, Clock: number)
 	--> costs sixty times what it says.
 	for _, Door in self.Doors do
 		if Door.Locked and Door.Label then
-			local Text = string.format(LabelFormat, SecondsLeft(GetUntil(Door.Plot)))
+			local Text = LabelText(Door)
 
 			if Door.Label.Text ~= Text then
 				Door.Label.Text = Text

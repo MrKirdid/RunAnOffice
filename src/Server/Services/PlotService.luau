@@ -10,6 +10,7 @@ local AntiCheatService = require(script.Parent.AntiCheatService)
 local NetworkingServer = require(Shared.Networking.networkingServer)
 local GameConfigs = require(Shared.Configs.GameConfigs)
 local DeskData = require(Shared.Utilities.DeskData)
+local PlotBounds = require(Shared.Utilities.PlotBounds)
 local PlayerData = require(Shared.PlayerData).server
 local PlotContainer = require(workspace.PlotContainer)
 
@@ -165,6 +166,8 @@ end
 --> Every client hides the floors of a plot its owner has not bought, and walks through them, but
 --> they stand solid on the server. The anti-cheat is told to look through them as well, so the
 --> roof of a base is somewhere to stand rather than a wall to be put back out of.
+--> The ceilings of the floors they do own go to the anti-cheat as well: the owner's client takes
+--> the collision off the one over their head, so a jump or a fling can carry them up through it.
 function PlotService:RefreshFloors(Player: Player, Plot: Model?)
 	local Floors = Plot and Plot:FindFirstChild("Floors")
 
@@ -175,14 +178,22 @@ function PlotService:RefreshFloors(Player: Player, Plot: Model?)
 	local Owned = self:GetFloors(Player)
 	local Hidden = {}
 	local Names = {}
+	local Bought = {}
 
 	for _, Folder in Floors:GetChildren() do
 		local Floor = tonumber(Folder.Name)
 
-		if Floor and not table.find(Owned, Floor) then
-			table.insert(Hidden, Folder)
-			table.insert(Names, Folder.Name)
+		if not Floor then
+			continue
 		end
+
+		if table.find(Owned, Floor) then
+			table.insert(Bought, Folder)
+			continue
+		end
+
+		table.insert(Hidden, Folder)
+		table.insert(Names, Folder.Name)
 	end
 
 	table.sort(Names)
@@ -193,8 +204,17 @@ function PlotService:RefreshFloors(Player: Player, Plot: Model?)
 		return
 	end
 
+	local Ceilings = {}
+
+	for _, Folder in Bought do
+		local Roof = PlotBounds.RoofOf(Folder)
+
+		table.move(Roof, 1, #Roof, #Ceilings + 1, Ceilings)
+	end
+
 	self.Hidden[Plot] = Key
 	AntiCheatService:SetHidden(Plot, Hidden)
+	AntiCheatService:SetPassable(Player, Ceilings)
 end
 
 function PlotService:GetPlot(Player: Player): Model?

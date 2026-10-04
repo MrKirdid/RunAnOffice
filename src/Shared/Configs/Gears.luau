@@ -1,3 +1,9 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+
+local Icons = require(Shared.Configs.Icons)
+
 --> The gear shop. Every entry is a Tool that lives in ReplicatedStorage.Assets.Gears under the same
 --> key, bought once with cash and kept in the save for good; one at a time sits in the backpack.
 --> The Tool in the place is only the look of it, a Handle and whatever mesh is on it: what a gear
@@ -20,6 +26,10 @@ export type Gear = {
 	Price: number,
 	Order: number,
 
+	--> what the hotbar shows for it: the default backpack only draws an image, so this is one out of
+	--> Configs.Icons rather than a render of the model
+	Icon: string,
+
 	--> seconds between uses, for a gear that is swung, thrown, placed or drunk
 	Cooldown: number?,
 
@@ -32,6 +42,9 @@ export type Gear = {
 	--> the swing the character makes on a use: "Slash" or "Lunge", the two the default animate
 	--> script knows, or nothing for a gear that is drunk or worn
 	Animation: string?,
+
+	--> a bat: how big its swing and its hit are drawn, 1 for the wooden one
+	Swing: number?,
 
 	--> how the tool sits in the hand and how big it is, over whatever the Tool in the place says:
 	--> Grip is the Tool's Grip, Scale multiplies the whole model, grip offset included. Here so a
@@ -56,8 +69,10 @@ local Gears = {
 			Description = "Swing to knock whoever is in front of you off their feet",
 			Price = 2_500,
 			Order = 1,
-			Cooldown = 1.5,
+			Icon = Icons.WoodenBat,
+			Cooldown = 3,
 			Animation = "Slash",
+			Swing = 1,
 			Grip = CFrame.new(0, 0.8, 0) * CFrame.Angles(math.pi, 0, 0),
 			Scale = 1.8,
 			IconRotation = CFrame.Angles(math.pi, 0, 0),
@@ -68,6 +83,7 @@ local Gears = {
 			Description = "Run 20% faster while you hold it",
 			Price = 5_000,
 			Order = 2,
+			Icon = Icons.CoilBlue,
 			Speed = 0.2,
 			Placeholder = { Color = Color3.fromRGB(80, 200, 255), Size = Vector3.new(1, 3, 1) },
 		},
@@ -76,6 +92,7 @@ local Gears = {
 			Description = "Throw it. It splats where it lands and slows anyone who walks through",
 			Price = 8_000,
 			Order = 3,
+			Icon = Icons.Goo,
 			Cooldown = 12,
 			Animation = "Lunge",
 			Plain = true,
@@ -91,6 +108,7 @@ local Gears = {
 			Description = "Sets a trap at your feet. The first player onto it is frozen",
 			Price = 12_000,
 			Order = 4,
+			Icon = Icons.Trap,
 			Cooldown = 15,
 			Placeholder = { Color = Color3.fromRGB(120, 120, 130), Size = Vector3.new(2, 0.4, 2) },
 		},
@@ -99,6 +117,7 @@ local Gears = {
 			Description = "Drink for a burst of speed",
 			Price = 15_000,
 			Order = 5,
+			Icon = Icons.SpeedPotion,
 			Cooldown = 45,
 			Placeholder = { Color = Color3.fromRGB(255, 200, 60), Size = Vector3.new(0.8, 1.4, 0.8) },
 		},
@@ -107,8 +126,10 @@ local Gears = {
 			Description = "Like the wooden one, but they go a lot further",
 			Price = 25_000,
 			Order = 6,
-			Cooldown = 1.5,
+			Icon = Icons.SteelBat,
+			Cooldown = 3,
 			Animation = "Slash",
+			Swing = 1.4,
 			Grip = CFrame.new(0, -1.6, 0),
 			Scale = 0.7,
 			Placeholder = { Color = Color3.fromRGB(190, 195, 205), Size = Vector3.new(0.6, 0.6, 4) },
@@ -118,6 +139,7 @@ local Gears = {
 			Description = "Drops a bomb. Anyone nearby when it goes off is sent flying",
 			Price = 30_000,
 			Order = 7,
+			Icon = Icons.Bomb,
 			Cooldown = 10,
 			Placeholder = { Color = Color3.fromRGB(30, 30, 35), Size = Vector3.new(2, 2, 2) },
 		},
@@ -126,6 +148,7 @@ local Gears = {
 			Description = "Run 40% faster while you hold it",
 			Price = 40_000,
 			Order = 8,
+			Icon = Icons.CoilGreen,
 			Speed = 0.4,
 			Placeholder = { Color = Color3.fromRGB(60, 140, 255), Size = Vector3.new(1, 3, 1) },
 		},
@@ -134,6 +157,7 @@ local Gears = {
 			Description = "Vanish for ten seconds",
 			Price = 60_000,
 			Order = 9,
+			Icon = Icons.InvisibilityCloak,
 			Cooldown = 40,
 			Placeholder = { Color = Color3.fromRGB(120, 60, 200), Size = Vector3.new(2, 3, 0.4) },
 		},
@@ -142,6 +166,7 @@ local Gears = {
 			Description = "Run 60% faster while you hold it",
 			Price = 120_000,
 			Order = 10,
+			Icon = Icons.CoilRed,
 			Speed = 0.6,
 			Placeholder = { Color = Color3.fromRGB(255, 90, 90), Size = Vector3.new(1, 3, 1) },
 		},
@@ -150,6 +175,7 @@ local Gears = {
 			Description = "Throw it where you point. A bigger bang than the bomb",
 			Price = 150_000,
 			Order = 11,
+			Icon = Icons.TNT,
 			Cooldown = 12,
 			Animation = "Lunge",
 			Placeholder = { Color = Color3.fromRGB(220, 50, 40), Size = Vector3.new(1.5, 2, 1.5) },

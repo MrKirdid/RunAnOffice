@@ -38,9 +38,12 @@ local Config = {
 		TutorialLocked = false,
 		TutorialRolled = false,
 
-		--> How many times the roll button has been pressed, ever. Written by RollingService, and
-		--> read by it for the lucky roll Configs.Tutorial names.
+		--> How many times the roll button has been pressed, ever, the press the next lucky roll lands
+		--> on (0 until the tutorial is over and it has been scheduled) and how many lucky rolls have
+		--> come round so far. All written by RollingService, off Configs.Tutorial.LuckyRolls.
 		Rolls = 0,
+		NextLuckyRoll = 0,
+		LuckyRolls = 0,
 
 		Luck = 1, -- 1 is the plain table, 2 doubles the rarest chance
 
@@ -127,6 +130,9 @@ local Config = {
 		--> RewardService; the client counts down off it to show when the next one is ready.
 		LastClaim = 0,
 		TotalCashEarned = 0,
+
+		--> Seconds spent in a server, ever. Counted only by LeaderboardService, for its board.
+		Playtime = 0,
 
 		Gamepasses = {},
 

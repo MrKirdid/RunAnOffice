@@ -67,6 +67,20 @@ local MoveStep = 0.05
 --> holding still: even the top of a standing jump is over in a few frames.
 local MaxStall = 0.3
 
+--> How far over the destroy height a root that vanished may last have been seen and still count as
+--> having fallen out of the world. A long fall is hundreds of studs a second, and the server only
+--> sees the position as often as the client sends it.
+local VoidReach = 100
+
+--> Seconds a throw is allowed on top of its own length: the server tells the client to fly, and
+--> the flight starts a round trip of somebody's bad connection later.
+local ThrowLatency = 0.5
+
+--> A throw carries them along it for as long as gravity keeps them up, then this many seconds of
+--> skid, and this many studs on top for a bounce off the floor.
+local ThrowSkid = 0.5
+local ThrowSlack = 4
+
 type Record = {
 	Strikes: number,
 	LastStrike: number,
@@ -93,8 +107,14 @@ type Watch = {
 	MinY: number,
 	LastDescent: number,
 	GraceUntil: number,
-	--> while the server itself is throwing the character, see Excuse
+	--> while a bat or a blast is throwing the character, see Excuse: which way and how fast, the
+	--> distance along it still unspent, and how high the throw may carry them
 	ExcusedUntil: number,
+	ThrowDirection: Vector3,
+	ThrowBank: number,
+	ThrowLift: number,
+	--> whether the throw has had them off the ground yet, so landing from it ends the lift
+	ThrowAirborne: boolean,
 	Anchor: CFrame?,
 }
 
@@ -129,6 +149,12 @@ local AntiCheatService = {
 	--> which every client hides and walks straight through. Left out of every cast, or somebody on
 	--> a roof is read as standing in the walls of the floor above it, by whoever registered them.
 	Hidden = {} :: { [Instance]: { Instance } },
+
+	--> The ceilings over the floors a player owns, which their own client takes the collision off for
+	--> the floor they stand in, so a jump or a throw can carry the root up through one and back. Left
+	--> out of that player's wall cast only: everyone else's client keeps them solid, and so does the
+	--> ground cast, since the lid of one floor is what the next one up is stood on.
+	Passable = {} :: { [Player]: { Instance } },
 }
 
 function AntiCheatService:RefreshParams()
@@ -148,11 +174,18 @@ function AntiCheatService:RefreshParams()
 	local Walls = table.clone(Characters)
 	table.move(Hidden, 1, #Hidden, #Walls + 1, Walls)
 
-	for _, Watch in self.Watches do
+	for Player, Watch in self.Watches do
 		local Ground = table.clone(Hidden)
 		table.insert(Ground, Watch.Character)
 
-		Watch.WallParams.FilterDescendantsInstances = Walls
+		local Own = self.Passable[Player]
+		local Through = if Own then table.clone(Walls) else Walls
+
+		if Own then
+			table.move(Own, 1, #Own, #Through + 1, Through)
+		end
+
+		Watch.WallParams.FilterDescendantsInstances = Through
 		Watch.GroundParams.FilterDescendantsInstances = Ground
 	end
 end
@@ -162,6 +195,13 @@ end
 --> any other plot said.
 function AntiCheatService:SetHidden(Key: Instance, Instances: { Instance })
 	self.Hidden[Key] = if #Instances > 0 then Instances else nil
+	self:RefreshParams()
+end
+
+--> Which ceilings this player may pass up through, replacing the last list: the lids of the floors
+--> they own. Called by PlotService whenever what they own changes.
+function AntiCheatService:SetPassable(Player: Player, Instances: { Instance })
+	self.Passable[Player] = if #Instances > 0 then Instances else nil
 	self:RefreshParams()
 end
 
@@ -218,18 +258,32 @@ function AntiCheatService:Forgive(Player: Player, Target: CFrame)
 	Watch.Airborne = false
 end
 
---> Looks away while the server moves a character by physics rather than by a pivot: a fling off
---> a bat or a blast, with the root owned by the server for the whole of it. The watch follows the
---> root along and comes back with a full bank, so the landing and the slide after it count as a
---> walk. Nothing about where it lands is taken from the client; the server put it there.
-function AntiCheatService:Excuse(Player: Player, Seconds: number)
+--> Tells the checks the server just threw this character: a fling off a bat or a blast, which the
+--> player's own client flies, since it owns the root. Not a blind eye. For the length of the
+--> throw, movement along it is paid for out of a bank of its own: the distance the throw could carry
+--> them through the air and a skid after. Anything across it or back against it still comes out of
+--> the walk. Height is allowed up to what the throw could lift them, until they come down from it.
+--> What a cheater gets out of being hit is the flight the hit gave them, and nothing past it.
+function AntiCheatService:Excuse(Player: Player, Seconds: number, Velocity: Vector3)
 	local Watch = self.Watches[Player]
 
 	if not Watch then
 		return
 	end
 
-	Watch.ExcusedUntil = math.max(Watch.ExcusedUntil, os.clock() + Seconds)
+	local Flat = Vector3.new(Velocity.X, 0, Velocity.Z)
+	local Speed = Flat.Magnitude
+	local Rise = math.max(Velocity.Y, 0)
+
+	Watch.ExcusedUntil = os.clock() + Seconds + ThrowLatency
+	Watch.ThrowDirection = if Speed > 0.1 then Flat.Unit else Vector3.zero
+
+	--> the whole of what the throw may carry them, not a rate: spent in one frame or ten, it is the
+	--> flight the hit gave them and no further
+	Watch.ThrowBank = Speed * SpeedTolerance * (2 * Rise / workspace.Gravity + ThrowSkid) + ThrowSlack
+	Watch.ThrowLift = math.max(Watch.ThrowLift, Rise ^ 2 / (2 * workspace.Gravity))
+	Watch.ThrowAirborne = false
+	Watch.LastDescent = os.clock()
 end
 
 --> The one way the server should move a character. Anything that pivots a player without going
@@ -279,6 +333,18 @@ function AntiCheatService:Sample(Player: Player, Watch: Watch, Delta: number, No
 	if Watch.Root.Parent ~= Watch.Character then
 		local Root = Watch.Character:FindFirstChild("HumanoidRootPart")
 
+		--> Falling off the map takes the root too: the engine deletes whatever drops under the
+		--> destroy height, and the last place the root was seen is right on top of it. That is a
+		--> death, not a tamper, and it is finished off here so the respawn is not left waiting on
+		--> a neck that may still be attached.
+		if
+			(not Root or not Root:IsA("BasePart"))
+			and Watch.Root.Position.Y < workspace.FallenPartsDestroyHeight + VoidReach
+		then
+			Humanoid.Health = 0
+			return
+		end
+
 		if not Root or not Root:IsA("BasePart") then
 			Player:Kick("Character tampered with.")
 			return
@@ -302,14 +368,7 @@ function AntiCheatService:Sample(Player: Player, Watch: Watch, Delta: number, No
 		return
 	end
 
-	if Now < Watch.ExcusedUntil then
-		Watch.LastPosition = Position
-		Watch.LastMove = Now
-		Watch.LastDescent = Now
-		Watch.Airborne = false
-		Watch.Bank = GetAllowed(Humanoid) * BankSeconds
-		return
-	end
+	local Thrown = Now < Watch.ExcusedUntil
 
 	--> Grace is over, and the character has to be about where the teleport put them. A client
 	--> that kept sending its own position through the move is put there again, and it costs a
@@ -341,7 +400,20 @@ function AntiCheatService:Sample(Player: Player, Watch: Watch, Delta: number, No
 		Watch.LastMove = Now
 	end
 
-	Watch.Bank = math.min(Watch.Bank + Allowed * Delta, Allowed * BankSeconds) - Flat.Magnitude
+	local Cost = Flat.Magnitude
+
+	if Thrown then
+		local Along = Flat:Dot(Watch.ThrowDirection)
+		local Across = (Flat - Watch.ThrowDirection * Along).Magnitude
+
+		local Spent = math.clamp(Along, 0, Watch.ThrowBank)
+
+		Watch.ThrowBank -= Spent
+		--> whatever the throw's bank did not cover, back against the throw included, is a walk
+		Cost = math.abs(Along - Spent) + Across
+	end
+
+	Watch.Bank = math.min(Watch.Bank + Allowed * Delta, Allowed * BankSeconds) - Cost
 
 	if Watch.Bank < -Overdraft then
 		self:Strike(Player, Watch, "speed", Now)
@@ -358,6 +430,12 @@ function AntiCheatService:Sample(Player: Player, Watch: Watch, Delta: number, No
 
 	if self:IsGrounded(Watch) then
 		Watch.Airborne = false
+
+		--> the lift is over once the throw has had them in the air and put them down, or once it has
+		--> run out without ever lifting them: it never pays for a jump of their own after landing
+		if not Thrown or Watch.ThrowAirborne then
+			Watch.ThrowLift = 0
+		end
 
 		--> Only a spot reached with the bank near full is worth going back to. A walk at full speed
 		--> earns more than it spends and stays there; a cheat drains it from the first frame, so the
@@ -381,12 +459,18 @@ function AntiCheatService:Sample(Player: Player, Watch: Watch, Delta: number, No
 		return
 	end
 
+	--> a ragdoll rolling over at the top of its arc is not hanging there
+	if Thrown then
+		Watch.ThrowAirborne = true
+		Watch.LastDescent = Now
+	end
+
 	if Position.Y < Watch.MinY - DescentStep then
 		Watch.MinY = Position.Y
 		Watch.LastDescent = Now
 	end
 
-	if Position.Y > Watch.AirStartY + GetJumpHeight(Humanoid) + ClimbSlack then
+	if Position.Y > Watch.AirStartY + GetJumpHeight(Humanoid) + ClimbSlack + Watch.ThrowLift then
 		self:Strike(Player, Watch, "fly", Now)
 		return
 	end
@@ -452,6 +536,10 @@ function AntiCheatService:Track(Player: Player, Character: Model)
 		LastDescent = Now,
 		GraceUntil = Now + GraceSeconds,
 		ExcusedUntil = 0,
+		ThrowDirection = Vector3.zero,
+		ThrowBank = 0,
+		ThrowLift = 0,
+		ThrowAirborne = false,
 		Anchor = nil,
 	}
 
@@ -502,6 +590,7 @@ function AntiCheatService:Init()
 		self.Watches[Player] = nil
 		self.Records[Player] = nil
 		self.Groups[Player] = nil
+		self.Passable[Player] = nil
 		self:RefreshParams()
 	end)
 end

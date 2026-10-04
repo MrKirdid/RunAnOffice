@@ -7,6 +7,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local DeskController = require(Shared.Controllers.DeskController)
 local NetworkingClient = require(Shared.Networking.networkingClient)
 local PlotController = require(Shared.Controllers.PlotController)
+local PlotBounds = require(Shared.Utilities.PlotBounds)
 local Signal = require(Shared.Packages.Fastsignal)
 local PlayerData = require(Shared.PlayerData).client
 
@@ -18,15 +19,6 @@ local ContainerName = "PlotContainer"
 --> The box PlotTemplate carries on every floor, sized to cover the whole room. Standing inside one
 --> is what hides the floors stacked above it.
 local BoundsName = "IsInFloor"
-
---> The one part of a floor's lid the builder gave a name to. The other six are laid flush with its
---> underside and left called Part, so this slab is what the rest are measured against rather than
---> something to go looking for by name.
-local RoofName = "Roof"
-
---> How far under the slab still counts as the lid. The highest thing below it is the wall trim,
---> which starts 0.3 further down, so this leaves room for float error and reaches nothing else.
-local RoofSlack = 0.05
 
 --> A desk is built into a folder of its own rather than into the floor it was placed on, and so is
 --> the person sitting at it, so sweeping the plot reaches neither.
@@ -195,21 +187,6 @@ local function Hideable(Object: Instance): boolean
 		or Object:IsA("Highlight")
 end
 
---> How far the underside of a part sits above Frame's origin, along Frame's own up. Measured this
---> way rather than against world Y because a plot is pivoted into place and everything standing on
---> it is turned with it. The reach is the part's own three half extents projected onto that up,
---> which is the lowest corner of the box however it is rotated.
-local function Underside(Frame: CFrame, Part: BasePart): number
-	local Up = Frame.UpVector
-	local Half = Part.Size / 2
-
-	local Reach = math.abs(Part.CFrame.RightVector:Dot(Up)) * Half.X
-		+ math.abs(Part.CFrame.UpVector:Dot(Up)) * Half.Y
-		+ math.abs(Part.CFrame.LookVector:Dot(Up)) * Half.Z
-
-	return Frame:PointToObjectSpace(Part.Position).Y - Reach
-end
-
 --> Only what is about to change is written down, so a reveal puts back exactly that and nothing
 --> else. A prompt has no transparency and a texture has no collision.
 local function Snapshot(Object: Instance): Recorded
@@ -281,10 +258,11 @@ function FloorsController:RefreshList()
 end
 
 --> Hidden rather than destroyed, because a floor has to be able to come straight back the moment
---> you buy it or step out of the room below it. Solid is for the ceiling over your own head, which
---> goes invisible but stays in the way: take its collision as well and a jump puts you up through
---> it into the floor above, which is hidden and not collidable either, so you land inside it.
-function FloorsController:Conceal(Object: Instance, Solid: boolean)
+--> you buy it or step out of the room below it. Collision goes with it, the ceiling over your own
+--> head included: a part that still collides ignores CanQuery, so a solid ceiling caught every
+--> click and hover aimed down through it. A jump that pokes through it is fine, because Step does
+--> not move you onto the floor above until you are standing on something.
+function FloorsController:Conceal(Object: Instance)
 	local Recorded = self.Restore[Object]
 
 	if not Recorded then
@@ -296,7 +274,7 @@ function FloorsController:Conceal(Object: Instance, Solid: boolean)
 	--> catch every click and hover meant for what is under it
 	if Object:IsA("BasePart") then
 		Object.Transparency = 1
-		Object.CanCollide = Solid and Recorded.CanCollide == true
+		Object.CanCollide = false
 		Object.CanQuery = false
 
 		return
@@ -358,12 +336,19 @@ function FloorsController:SetShown(Root: Instance, Show: boolean)
 			continue
 		end
 
+		--> and so is everything stuck to it: the box on floor 2 and up carries a copy of the
+		--> floor's wood texture on its top face, which drew as a see-through ceiling over the room
+		if Object:FindFirstAncestor(BoundsName) then
+			self:Conceal(Object)
+			continue
+		end
+
 		if Show then
 			self:Reveal(Object)
 			continue
 		end
 
-		self:Conceal(Object, false)
+		self:Conceal(Object)
 	end
 end
 
@@ -380,14 +365,6 @@ function FloorsController:GetRoof(Folder: Instance): { Instance }
 	end
 
 	local Roof = {}
-	local Slab = nil :: BasePart?
-
-	for _, Object in Folder:GetDescendants() do
-		if Object.Name == RoofName and Object:IsA("BasePart") then
-			Slab = Object
-			break
-		end
-	end
 
 	self.Roofs[Folder] = Roof
 
@@ -397,17 +374,7 @@ function FloorsController:GetRoof(Folder: Instance): { Instance }
 	--> the warning fired on every plot that loaded slowly and said nothing about the one case it
 	--> was for. WatchFloor drops this answer the moment anything else arrives, which is what turns
 	--> an early nil into the real lid rather than into a permanent one.
-	if not Slab then
-		return Roof
-	end
-
-	local Line = -Slab.Size.Y / 2 - RoofSlack
-
-	for _, Object in Folder:GetDescendants() do
-		if not Object:IsA("BasePart") or Underside(Slab.CFrame, Object) < Line then
-			continue
-		end
-
+	for _, Object in PlotBounds.RoofOf(Folder) do
 		table.insert(Roof, Object)
 
 		for _, Attached in Object:GetDescendants() do
@@ -449,7 +416,7 @@ function FloorsController:SetRoofShown(Folder: Instance, Show: boolean)
 			continue
 		end
 
-		self:Conceal(Object, true)
+		self:Conceal(Object)
 	end
 end
 
@@ -547,6 +514,16 @@ function FloorsController:Step()
 
 	if Floors and Root and Root:IsA("BasePart") then
 		Inside = FloorAt(Floors, Root.Position)
+	end
+
+	--> Never up a floor in mid air. The ceiling is not solid while it is hidden, so a jump can put the
+	--> root a little way into the room above, and revealing that room around a player who is about
+	--> to fall back out of it would drop its floor in under their feet.
+	local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+	local Airborne = Humanoid ~= nil and Humanoid.FloorMaterial == Enum.Material.Air
+
+	if Airborne and Inside and self.Inside and Inside > self.Inside then
+		Inside = self.Inside
 	end
 
 	--> Held on the floor being travelled to until the root turns up there: the server's move is a

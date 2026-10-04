@@ -275,6 +275,21 @@ local function FlushBatch<T>(FireAll: ({ T }) -> (), Batch: { T })
 	table.clear(Batch)
 end
 
+--> The walk goes out with the server clock it was stepped on, every batch of the tick carrying the
+--> same stamp, so a client plays it back at the pace it was walked rather than the pace it arrived.
+local function FlushMoved(Time: number)
+	local Count = #Moved
+
+	for Start = 1, Count, BatchSize do
+		NetworkingServer.Employees.Moved.FireAll({
+			Time = Time,
+			Steps = table.move(Moved, Start, math.min(Start + BatchSize - 1, Count), 1, {}),
+		})
+	end
+
+	table.clear(Moved)
+end
+
 function EmployeeService:NewEmployee(EmployeeData: Employee): Tracked
 	local Employee: Tracked = {
 		LastBoughtBy = nil,
@@ -614,7 +629,7 @@ function EmployeeService:Start()
 
 			FlushBatch(NetworkingServer.Employees.Added.FireAll, Spawned)
 			FlushBatch(NetworkingServer.Employees.OwnerChanged.FireAll, OwnerChanged)
-			FlushBatch(NetworkingServer.Employees.Moved.FireAll, Moved)
+			FlushMoved(workspace:GetServerTimeNow())
 			FlushBatch(NetworkingServer.Employees.Removed.FireAll, Removed)
 		end
 	end)

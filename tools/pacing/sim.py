@@ -129,7 +129,14 @@ HIRE = 5.0          # walk to a passing employee and buy them
 BUY = 2.0           # press a desk board / a tree node
 ROLL_OVERHEAD = 4.0 # stand on the prompt and press it
 SPAWN = 5.0         # EmployeeService.SpawnRate
-TUTORIAL_LUCKY = {6, 11}
+# Configs.Tutorial.LuckyRolls: the tutorial's one roll is press 1 and the bot is taken to be done with
+# it by press 2, so the big lucky press is the After'th after that and the small ones come every 7-10
+TUTORIAL_DONE = 2
+LUCKY_AFTER = 2
+LUCKY_EVERY = (7, 10)
+LUCKY_BIG = (100, "Cloudy")
+LUCKY_SMALL = (10, "Coral")
+FIRST_ROLL = "Cloudy"
 HIRE_PAYBACK = 300
 NOTICE = 1.0         # share of passing employees the player actually sees  # seconds of extra income a staff upgrade must repay in
 
@@ -140,6 +147,7 @@ class Bot:
         self.slow, self.desk_first = slow, desk_first
         self.comp = Table(cfg["base"])
         self.var = Table(cfg["variants"])
+        self.floors = {}
         self.emp = Table(cfg["emp"])
         base_var = self.var.chances(1)
         self.var_tier = {n: tier_of(1 / base_var[n]) for n in self.var.names}
@@ -151,6 +159,8 @@ class Bot:
         self.walk = 1.0
         self.pads = pads if pads is not None else cfg["pads"]
         self.rolls = 0
+        self.next_lucky = TUTORIAL_DONE + LUCKY_AFTER
+        self.lucky_given = 0
         self.owned = set()
         self.free_node = True
         self.gears = list(cfg["gears"][1:])
@@ -188,7 +198,13 @@ class Bot:
 
     def roll(self):
         self.rolls += 1
-        luck = self.luck * (100 if self.rolls in TUTORIAL_LUCKY else 1)
+        boost = None
+        if self.rolls == self.next_lucky:
+            boost = LUCKY_BIG if self.lucky_given == 0 else LUCKY_SMALL
+            self.lucky_given += 1
+            self.next_lucky = self.rolls + self.rng.randint(*LUCKY_EVERY)
+        luck = self.luck * (boost[0] if boost else 1)
+        floored = self.rng.randrange(self.pads) if boost else None
         spin = 1.894 / max(self.roll_speed, 0.1) + 0.25
         self.advance(ROLL_OVERHEAD)
         self.advance(spin, scaled=False)
@@ -197,7 +213,9 @@ class Bot:
             vi = self.var.pick(self.rng, luck)
             ci = self.comp.pick(self.rng, luck)
             if self.rolls == 1 and slot == 0:
-                vi = self.var.names.index("Tree")
+                vi = self.var.names.index(FIRST_ROLL)
+            if slot == floored:
+                vi = self.var_floor(boost[1], luck)
             self.note_tier(vi)
             results.append((ci, self.var.value[vi] * self.comp.value[ci]))
         # carry improvements, best gain first, one part per trip
@@ -212,6 +230,13 @@ class Bot:
                 continue
             where[0][ci] = value
             self.advance(TRIP / self.walk)
+
+    def var_floor(self, floor, luck):
+        """A variant off the table cut down to floor and rarer, as RollingService rolls a lucky pad."""
+        cut = self.cfg["variants"][floor][1]
+        entries = {n: v for n, v in self.cfg["variants"].items() if v[1] <= cut}
+        table = self.floors.setdefault(floor, Table(entries))
+        return self.var.names.index(table.names[table.pick(self.rng, luck)])
 
     def open_gifts(self, desk):
         for ci in range(3):
@@ -265,7 +290,7 @@ class Bot:
         if fn == "AddLuck":
             self.luck += float(args[0])
         elif fn == "AddPads":
-            self.pads = min(self.pads + int(float(args[0])), 17)
+            self.pads = min(self.pads + int(float(args[0])), 9)
         elif fn == "AddMultiplier":
             name, amt = args[0], float(args[1])
             if name == "Cash":

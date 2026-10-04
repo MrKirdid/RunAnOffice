@@ -215,14 +215,19 @@ scope Employees {
 		Data: Spawn[1..255]
 	}
 
+	-- one tick of the walk. Time is workspace:GetServerTimeNow() when the tick ran, so a client
+	-- plays the walk back on the server's clock rather than on whenever the packet turned up
 	event Moved {
 		From: Server,
 		Type: Reliable,
 		Call: SingleAsync,
 		Data: struct {
-			UID: UID,
-			Position: Position
-		}[1..255]
+			Time: f64,
+			Steps: struct {
+				UID: UID,
+				Position: Position
+			}[1..255]
+		}
 	}
 
 	event Removed {
@@ -359,6 +364,34 @@ scope Gears {
 		Call: SingleAsync,
 		Data: f32
 	}
+
+	enum Fx = { Swing, Bonk, Blast, Splat, Snap, Gulp, Cloak }
+
+	-- something a gear did that everyone should see: what, where, which way, how big, who did it and
+	-- who it landed on. Only the look of it; whatever it did is already done on the server
+	event Effect {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: struct {
+			Kind: Fx,
+			At: vector,
+			Direction: vector,
+			Size: f32,
+			By: Player?,
+			Target: Player?
+		}
+	}
+
+	-- a bat or a blast threw this player. The server has already gone limp on their joints; their
+	-- own client owns the character, so it is the one that puts the throw on the root, which is
+	-- what keeps the flight smooth on everyone else's screen
+	event Flung {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: vector
+	}
 }
 
 scope Rewards {
@@ -367,5 +400,36 @@ scope Rewards {
 	function Claim {
 		Yield: Promise,
 		Return: f64
+	}
+}
+
+scope Leaderboards {
+	enum Board = { Cash, Playtime }
+
+	-- one board's top hundred, highest first. Value is what it ranks by: cash earned for Cash,
+	-- seconds played for Playtime. Name is the display name, looked up once by the server
+	struct Entry {
+		UserId: f64,
+		Name: string(0..40),
+		Value: f64
+	}
+
+	struct Standings {
+		Board: Board,
+		Entries: Entry[0..100]
+	}
+
+	-- every board as the server last read it, for a client that has just come up
+	function Get {
+		Yield: Promise,
+		Return: Standings[0..2]
+	}
+
+	-- a board read again, to everyone, every few minutes
+	event Update {
+		From: Server,
+		Type: Reliable,
+		Call: SingleAsync,
+		Data: Standings
 	}
 }

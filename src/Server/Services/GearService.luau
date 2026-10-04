@@ -202,6 +202,9 @@ function GearService:Apply(Player: Player)
 		--> the Tools in the place keep whatever they were saved with, which is droppable by default
 		Copy.CanBeDropped = false
 
+		--> the hotbar draws this, or the gear's name in plain text without it
+		Copy.TextureId = Config.Icon
+
 		--> the config has the last word on how it sits in the hand and how big it is
 		if Config.Grip then
 			Copy.Grip = Config.Grip

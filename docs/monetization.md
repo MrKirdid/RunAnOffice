@@ -1,5 +1,19 @@
 # Monetization
 
+## 2026-10-04 reprice (current)
+
+The audience is younger and mostly from lower-income markets (expected: the Philippines), so
+every price was cut to cheap impulse entries with a top kept for whales. Founder, Grav Coil,
+Trolley and Auto Roll are gone. This list is what `Configs/Products.luau` sells; every table and
+argument further down predates the cut and still quotes the old prices and the dropped items.
+
+- Packs: Starter 9, Pro 99, Executive 299, CEO 999. Contents unchanged.
+- Passes: Sprint 9, Fast Spin 19, Jetpack 79, Lucky Roller 99, VIP 199, Everything 299 (26% off
+  the 405 they add up to). Jetpack is listed but not implemented yet.
+- Cash ladder: 9 / 19 / 29 / 49 / 79 / 129 for x1.5 / x2 / x3 / x4 / x6 / x8.
+- +1 roll pad: 25. Server luck: 19 / 49 / 99 / 249. Time skips: 9 / 19 / 49 / 99.
+- The ladder and the pad are drawn as cash cards in the shop, not pass cards.
+
 Supersedes `docs/packs.txt`. Nothing here is wired up yet: `MarketplaceService` appears
 nowhere in `src/`, and `Gamepasses = {}` in `PlayerData.luau` is the only hook that exists.
 

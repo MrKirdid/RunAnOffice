@@ -27,8 +27,6 @@ local ConfettiVFX = Assets.VFX.ConfettiVFX
 
 local DeskDisplayTime = 4
 
---> How often Auto Roll looks for a chance to press the button.
-local AutoRollInterval = 3
 local DeskDisplay = { Duration = DeskDisplayTime, OnTop = true }
 
 local PickupText = "Pick Up!"
@@ -507,36 +505,6 @@ function RollingService:Start()
 		self:RollSlots()
 
 		Prompt.Enabled = true
-	end)
-
-	--> Auto Roll presses the button for the player while they stand on their own plot. Paced by
-	--> the spin rather than a timer, and never while a roll is already going or the button is
-	--> switched off for one.
-	task.spawn(function()
-		while true do
-			task.wait(AutoRollInterval)
-
-			if not Store.Owns(PlayerData, "AutoRoll") or self.Rolling or not Prompt.Enabled then
-				continue
-			end
-
-			local Character = Players.LocalPlayer.Character
-			local Root = Character and Character:FindFirstChild("HumanoidRootPart")
-
-			if not Root or not Root:IsA("BasePart") then
-				continue
-			end
-
-			local Reach = Plot:GetExtentsSize().Magnitude / 2
-
-			if (Plot:GetPivot().Position - Root.Position).Magnitude > Reach then
-				continue
-			end
-
-			Prompt.Enabled = false
-			self:RollSlots()
-			Prompt.Enabled = true
-		end
 	end)
 end
 

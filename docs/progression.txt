@@ -1,0 +1,209 @@
+RUN AN OFFICE - PROGRESSION ESTIMATE
+Simulated from a fresh save, 60 runs, median shown unless it says otherwise. Generated 2026-09-29.
+
+ASSUMPTIONS (a solo player who plays normally):
+  No Robux, no friends, no offline time, no gears or stealing. Tutorial lucky presses (#6, #11) and the
+  rigged first roll are included. Every action takes 25% longer than perfect play.
+  Loop: hire for any empty seat (best walker costing up to half their cash, or the cheapest they can
+  afford) > buy the next desk the moment it is affordable > buy the cheapest tree node costing at most
+  60% of the next desk > swap in a walker at least +1x better when it costs up to 30% of cash > else roll
+  all pads and place every part that beats what is standing (5s per placement).
+  Walkers: one every 5s, on the street for 60s. A new desk's 3 gifts roll at the player's luck.
+
+======================================================================================================================
+1. SNAPSHOT BY MINUTE PLAYED  (income/s shown as low / median / high = 10th / 50th / 90th percentile)
+======================================================================================================================
+   Minute  Income/s (lo/med/hi)        Earned      Cash  Desks Staffed  Avg emp Avg part  Nodes   Luck Cashx  Pads
+       1m  70.2 / 101 / 156             3.18K     1.93K      3       2     1.3x      7.9      0   1.00  1.00     9
+       2m  226 / 326 / 520              16.3K     6.78K      4       4     1.6x      8.7      4   1.25  1.25     9
+       3m  436 / 635 / 886                43K     12.5K      6       6     2.0x      9.4      5   1.25  1.25     9
+       5m  1.19K / 1.67K / 2.59K         174K     27.2K      8       8     2.5x     10.9      7   1.25  1.25     9
+      10m  4.72K / 5.78K / 8.37K        1.36M      220K     13      13     3.1x     14.1     13   1.75  1.75    11
+      15m  12.1K / 14.8K / 20.6K        4.26M      404K     15      15     3.6x     16.4     18   2.75  2.75    11
+      20m  17.5K / 21.2K / 28K          9.47M      799K     18      18     3.8x     18.2     21   4.25  2.75    11
+      30m  50.1K / 63.7K / 74.4K        31.3M     2.23M     24    23.5     4.0x     22.3     24   6.25  4.75    11
+      40m  77.7K / 92.9K / 119K         78.1M     4.88M     27      27     4.2x     26.7     28  13.25  4.75    13
+      50m  114K / 132K / 171K            147M      6.9M     30      30     4.4x     32.5     31  21.25  4.75    17
+       1h  154K / 186K / 225K            243M     26.6M     32      32     4.6x     39.1     32  31.25  4.75    17
+     1h15  227K / 261K / 314K            443M      226M     32      32     4.8x     52.0     32  31.25  4.75    17
+     1h30  286K / 333K / 396K            713M      495M     32      32     5.1x     62.0     32  31.25  4.75    17
+       2h  400K / 451K / 523K           1.44B     1.22B     32      32     5.5x     78.6     32  31.25  4.75    17
+     2h30  503K / 553K / 629K           2.33B     2.11B     32      32     5.8x     91.3     32  31.25  4.75    17
+       3h  572K / 632K / 714K           3.38B     3.16B     32      32     6.0x    101.4     32  31.25  4.75    17
+       4h  684K / 769K / 875K            5.9B     5.68B     32      32     6.2x    120.7     32  31.25  4.75    17
+       5h  772K / 881K / 1M             8.87B     8.66B     32      32     6.5x    135.0     32  31.25  4.75    17
+       6h  868K / 985K / 1.12M          12.3B     12.1B     32      32     6.7x    146.5     32  31.25  4.75    17
+       8h  1.06M / 1.16M / 1.27M        20.2B       20B     32      32     7.0x    166.3     32  31.25  4.75    17
+      10h  1.21M / 1.3M / 1.4M          29.1B     28.9B     32      32     7.2x    182.7     32  31.25  4.75    17
+      12h  1.34M / 1.43M / 1.52M          39B     38.8B     32      32     7.4x    194.6     32  31.25  4.75    17
+      15h  1.46M / 1.56M / 1.66M        55.4B     55.1B     32      32     7.7x    210.9     32  31.25  4.75    17
+      18h  1.56M / 1.68M / 1.81M          73B     72.7B     32      32     7.8x    223.9     32  31.25  4.75    17
+      20h  1.63M / 1.76M / 1.89M          85B     84.8B     32      32     7.9x    231.0     32  31.25  4.75    17
+      24h  1.78M / 1.9M / 2.03M          111B      111B     32      32     8.1x    245.3     32  31.25  4.75    17
+      30h  1.92M / 2.06M / 2.16M         154B      154B     32      32     8.2x    263.2     32  31.25  4.75    17
+      36h  2.06M / 2.17M / 2.27M         200B      199B     32      32     8.4x    274.2     32  31.25  4.75    17
+      48h  2.27M / 2.37M / 2.5M          298B      298B     32      32     8.6x    295.4     32  31.25  4.75    17
+  Avg emp = average seated employee multiplier. Avg part = average variant value standing on desks.
+  Cashx = tree cash multiplier. Nodes = upgrade tree nodes owned (33 buyable).
+
+======================================================================================================================
+2. MILESTONES IN ORDER  (time played; fast / median / slow = 10th / 50th / 90th percentile; runs = how many of 60 got there in 48h)
+======================================================================================================================
+  Milestone                                      Fast     Median       Slow   Runs
+  First Common part                                0s         4s         4s  60/60
+  First Uncommon part                              0s         4s        20s  60/60
+  Desk 2                                           0s         4s         4s  60/60
+  First Rare part                                  4s        41s     2m 40s  60/60
+  Desk 3                                          44s        51s     1m 04s  60/60
+  Income 100/s                                    35s     1m 01s     1m 18s  60/60
+  Tree: Speed I                                   20s     1m 07s     1m 29s  60/60
+  Tree: Cash I                                    58s     1m 11s     1m 36s  60/60
+  Tree: Lucky I                                1m 08s     1m 15s     1m 47s  60/60
+  Desk 4                                       1m 07s     1m 35s     1m 53s  60/60
+  Tree: Smart Roller                           1m 19s     1m 35s     1m 59s  60/60
+  Desk 5                                       1m 39s     2m 05s     2m 26s  60/60
+  Tree: Speed II                               2m 11s     2m 36s     3m 08s  60/60
+  Desk 6                                       2m 23s     2m 48s     3m 10s  60/60
+  Desk 7                                       3m 02s     3m 31s     3m 56s  60/60
+  Income 1000/s                                3m 14s     3m 59s     4m 35s  60/60
+  Tree: Base Locker                            3m 23s     4m 01s     4m 35s  60/60
+  First Epic part                              1m 19s     4m 31s    10m 53s  60/60
+  Desk 8                                       3m 52s     4m 31s     5m 09s  60/60
+  Tree: Faster Employees                       3m 57s     4m 37s     5m 19s  60/60
+  Tree: Cash II                                4m 45s     5m 15s     5m 44s  60/60
+  Tree: Gear Slot                              5m 04s     5m 35s     6m 15s  60/60
+  Floor 2 opened                               4m 53s     5m 38s     6m 21s  60/60
+  Desk 9                                       4m 53s     5m 38s     6m 21s  60/60
+  Tree: Lucky II                               5m 26s     6m 07s     6m 36s  60/60
+  Tree: Faster Rolls                           5m 58s     6m 25s     6m 58s  60/60
+  Desk 10                                      5m 50s     6m 47s     7m 49s  60/60
+  Tree: More Rollers                           6m 20s     6m 56s     7m 35s  60/60
+  Desk 11                                      6m 56s     7m 55s     8m 33s  60/60
+  First 5x+ employee                           5m 26s     8m 23s    17m 14s  60/60
+  Desk 12                                      7m 53s     8m 32s     9m 20s  60/60
+  First Legendary part                         1m 59s     9m 00s    23m 08s  60/60
+  Tree: Stronger Defenses                      8m 23s     9m 22s    10m 07s  60/60
+  Desk 13                                      8m 51s     9m 44s    10m 54s  60/60
+  Tree: Faster Employees II                    9m 48s    10m 39s    11m 54s  60/60
+  Desk 14                                     10m 10s    11m 25s    12m 28s  60/60
+  Tree: Gear Slot II                          10m 54s    12m 12s    13m 19s  60/60
+  Tree: Even Faster Rolls                     11m 28s    12m 43s    13m 59s  60/60
+  Tree: Cash III                              12m 02s    13m 16s    14m 35s  60/60
+  Income 10000/s                              11m 43s    13m 17s    14m 36s  60/60
+  Desk 15                                     11m 51s    13m 53s    15m 17s  60/60
+  Tree: Lucky III                             13m 06s    14m 32s    15m 57s  60/60
+  Desk 16                                     13m 14s    15m 03s    16m 26s  60/60
+  Tree: Legendary Chances                     13m 58s    15m 43s    17m 15s  60/60
+  Floor 3 opened                              14m 40s    16m 22s    18m 06s  60/60
+  Desk 17                                     14m 40s    16m 22s    18m 06s  60/60
+  Tree: Faster Employees III                  15m 08s    17m 03s    18m 48s  60/60
+  Desk 18                                     15m 56s    18m 04s    19m 37s  60/60
+  Tree: Fastest Rolls                         16m 38s    18m 53s    20m 23s  60/60
+  Desk 19                                     17m 21s    20m 03s    21m 39s  60/60
+  Desk 20                                     18m 42s    21m 34s    23m 13s  60/60
+  Tree: Super Lasers                          19m 44s    22m 30s    23m 53s  60/60
+  Desk 21                                     21m 01s    23m 52s    25m 35s  60/60
+  Desk 22                                     22m 33s    25m 38s    27m 28s  60/60
+  Tree: Cash IV                               23m 40s    26m 44s    28m 41s  60/60
+  Desk 23                                     24m 52s    27m 56s    30m 01s  60/60
+  Tree: Lucky IV                              25m 30s    28m 43s    30m 42s  60/60
+  Desk 24                                     26m 41s    29m 50s    32m 07s  60/60
+  Floor 4 opened                              28m 11s    31m 17s    33m 41s  60/60
+  Desk 25                                     28m 11s    31m 17s    33m 41s  60/60
+  Tree: Mythic Chances                        29m 01s    32m 09s    34m 46s  60/60
+  Tree: Master Rolling                        30m 02s    33m 05s    35m 44s  60/60
+  Desk 26                                     31m 33s    34m 44s    37m 03s  60/60
+  Desk 27                                     33m 10s    36m 35s    38m 57s  60/60
+  Tree: Lucky V                               34m 17s    37m 44s    40m 13s  60/60
+  Tree: Even More  Rollers                    35m 15s    38m 45s    41m 21s  60/60
+  Desk 28                                     36m 59s    40m 43s    43m 20s  60/60
+  Income 100000/s                             36m 08s    41m 29s    47m 31s  60/60
+  First Mythic part                            8m 35s    42m 09s     1h 00m  60/60
+  Desk 29                                     38m 43s    42m 49s    45m 42s  60/60
+  Tree: Super  Many Rollers                   39m 58s    43m 57s    47m 08s  60/60
+  Desk 30                                     42m 20s    46m 14s    49m 47s  60/60
+  Tree: Final Roller                          43m 55s    47m 58s    51m 29s  60/60
+  Tree: Godly Chances                         45m 25s    49m 29s    52m 55s  60/60
+  First 8x+ employee                          17m 22s    50m 39s     3h 19m  60/60
+  Desk 31                                     47m 47s    52m 01s    55m 27s  60/60
+  Plot finished (32 desks)                    50m 02s    54m 52s    58m 25s  60/60
+  Desk 32                                     50m 02s    54m 52s    58m 25s  60/60
+  Tree: Luckiest                              52m 41s    57m 45s     1h 01m  60/60
+  First Divine part                           51m 53s     1h 33m     2h 26m  60/60
+  Income 1000000/s                             4h 59m     6h 05m     7h 28m  60/60
+  First 10x employee (King Ceo)                2h 25m    15h 57m    38h 55m  50/60
+
+======================================================================================================================
+3. DESK PURCHASES  (what each desk costs against what the player was making when they bought it)
+======================================================================================================================
+   Desk  Floor       Price   Bought at   Income then       Cost in          Design target
+                              (median)      (median)   income time                       
+      2      1         450          4s           0/s             -                 10-30s
+      3      1        1.1K         51s        97.4/s           11s                 10-30s
+      4      1        2.5K      1m 35s         222/s           11s                 10-30s
+      5      1        5.5K      2m 05s         353/s           15s                       
+      6      1         11K      2m 48s         536/s           20s                       
+      7      1         20K      3m 31s         796/s           25s                       
+      8      1         35K      4m 31s       1.24K/s           28s   floor 1 done ~10 min
+      9      2         60K      5m 38s       2.31K/s           25s   floor 2 opens 10-15m
+     10      2         95K      6m 47s       3.29K/s           28s                       
+     11      2        140K      7m 55s       4.02K/s           34s                       
+     12      2        200K      8m 32s       4.64K/s           43s                       
+     13      2        280K      9m 44s       5.74K/s           48s                       
+     14      2        380K     11m 25s       6.96K/s           54s                       
+     15      2        500K     13m 53s       12.9K/s           38s                       
+     16      2        650K     15m 03s       14.9K/s           43s       floor 2 done ~1h
+     17      3        850K     16m 22s       16.5K/s           51s                       
+     18      3        1.1M     18m 04s       18.5K/s           59s                       
+     19      3        1.4M     20m 03s       21.2K/s        1m 06s                       
+     20      3        1.8M     21m 34s       22.9K/s        1m 18s                       
+     21      3        2.3M     23m 52s       26.6K/s        1m 26s                       
+     22      3        2.9M     25m 38s       29.6K/s        1m 37s                       
+     23      3        3.6M     27m 56s       56.2K/s        1m 04s                       
+     24      3        4.5M     29m 50s       60.6K/s        1m 14s       floor 3 done ~3h
+     25      4        5.6M     31m 17s       64.9K/s        1m 26s                       
+     26      4          7M     34m 44s       75.6K/s        1m 32s                       
+     27      4        8.5M     36m 35s       81.1K/s        1m 44s                       
+     28      4       10.5M     40m 43s         98K/s        1m 47s                       
+     29      4         13M     42m 49s        106K/s        2m 03s                       
+     30      4         16M     46m 14s        119K/s        2m 14s                       
+     31      4         20M     52m 01s        144K/s        2m 19s                       
+     32      4         25M     54m 52s        158K/s        2m 38s  last desk ~25 min inc
+
+======================================================================================================================
+4. UPGRADE TREE NODES  (cost against income at the median time it was bought)
+======================================================================================================================
+  Node                              Cost   Bought at   Income then       Cost in
+  Speed I                            400      1m 07s         101/s            3s
+  Cash I                             500      1m 11s         101/s            4s
+  Lucky I                            750      1m 15s         101/s            7s
+  Smart Roller                        1K      1m 35s         101/s            9s
+  Speed II                            6K      2m 36s         326/s           18s
+  Base Locker                        15K      4m 01s         635/s           23s
+  Faster Employees                   20K      4m 37s         635/s           31s
+  Cash II                            25K      5m 15s       1.67K/s           14s
+  Gear Slot                          25K      5m 35s       1.67K/s           14s
+  Lucky II                           35K      6m 07s       1.67K/s           20s
+  Faster Rolls                       40K      6m 25s       1.67K/s           23s
+  More Rollers                       50K      6m 56s       1.67K/s           29s
+  Stronger Defenses                 150K      9m 22s       1.67K/s        1m 29s
+  Faster Employees II               200K     10m 39s       5.78K/s           34s
+  Gear Slot II                      250K     12m 12s       5.78K/s           43s
+  Even Faster Rolls                 250K     12m 43s       5.78K/s           43s
+  Cash III                          300K     13m 16s       5.78K/s           51s
+  Lucky III                         350K     14m 32s       5.78K/s        1m 00s
+  Legendary Chances                 400K     15m 43s       14.8K/s           27s
+  Faster Employees III              600K     17m 03s       14.8K/s           40s
+  Fastest Rolls                     800K     18m 53s       14.8K/s           54s
+  Super Lasers                      1.2M     22m 30s       21.2K/s           56s
+  Cash IV                             2M     26m 44s       21.2K/s        1m 34s
+  Lucky IV                          2.5M     28m 43s       21.2K/s        1m 57s
+  Mythic Chances                    3.5M     32m 09s       63.7K/s           54s
+  Master Rolling                      4M     33m 05s       63.7K/s        1m 02s
+  Lucky V                             6M     37m 44s       63.7K/s        1m 34s
+  Even More  Rollers                  6M     38m 45s       63.7K/s        1m 34s
+  Super  Many Rollers                 8M     43m 57s       92.9K/s        1m 26s
+  Final Roller                       12M     47m 58s       92.9K/s        2m 09s
+  Godly Chances                      12M     49m 29s       92.9K/s        2m 09s
+  Luckiest                           30M     57m 45s        132K/s        3m 46s
+  'Income then' is read at the checkpoint before the purchase, so it slightly understates late buys.

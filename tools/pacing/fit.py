@@ -34,16 +34,20 @@ DESK_TARGETS = [0, 30, 75, 120, 180, 255, 345, 465,
 # 15s each, floor 1 5-15m at 20-60s, floor 2 15m-1h at 2-5m, floor 3 1h-3h at 5-10m, floor 4
 # 3h-6h30 at 10-20m, Luckiest ~7h at ~40m. Cash III and IV sit at the top of their stage.
 NODE_TARGETS = {
+    # the pad chain off the right of Exit: pad 2 in the first minute (free in the tutorial), then 5,
+    # 10, 10 and 20 minutes apart
+    "RollerI": (45, 8), "RollerII": (6 * M, 30), "RollerIII": (16 * M, 60), "RollerIV": (26 * M, 120),
+    "RollerV": (46 * M, 240),
     "CashI": (90, 10), "SpeedI": (135, 10), "LuckyI": (180, 12), "SmartRoller": (225, 14),
     "SpeedII": (5 * M, 20), "NewNode": (6.5 * M, 25), "FasterEmployees": (8 * M, 30),
     "GearSlotsI": (9.5 * M, 35), "LuckyII": (11 * M, 45), "CashII": (13.5 * M, 45),
     "FasterRolls": (17 * M, 120), "NewNode3": (22 * M, 150), "FasterEmployeesII": (28 * M, 180),
-    "GearSlotsII": (34 * M, 210), "FasterRollsPlus": (41 * M, 240), "HypeRoller": (48 * M, 270),
+    "GearSlotsII": (34 * M, 210), "FasterRollsPlus": (41 * M, 240), "HypeRoller": (100 * M, 400),
     "CashIII": (55 * M, 300),
     "LuckyIII": (65 * M, 300), "LegendaryChances": (80 * M, 360), "NewNode2": (95 * M, 390),
     "NewNode5": (115 * M, 450), "NewNode4": (135 * M, 480), "LuckyIV": (155 * M, 540), "CashIV": (175 * M, 600),
     "MythicChances": (190 * M, 600), "MegaRoller": (220 * M, 720), "LuckyV": (250 * M, 780),
-    "NewNode6": (280 * M, 900), "GigaRoller": (310 * M, 960), "GodlyChances": (345 * M, 1080),
+    "NewNode6": (200 * M, 700), "GigaRoller": (310 * M, 960), "GodlyChances": (345 * M, 1080),
     "NewNode8": (380 * M, 1200),
     "Luckiest": (420 * M, 2400),
 }

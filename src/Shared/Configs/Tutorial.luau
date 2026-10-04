@@ -84,7 +84,7 @@ local Stages: { Stage } = {
 	{
 		Name = "PickUp",
 		Text = "Pick up the part you just rolled",
-		Detail = "Hold E on it. The green one is rarer than anything on your desk",
+		Detail = "Hold E on it. The blue one is rarer than anything on your desk",
 		Check = function(Data: any): boolean
 			return Data.TutorialRolled() == true and Data.Holding().Component ~= nil
 		end,
@@ -95,6 +95,14 @@ local Stages: { Stage } = {
 		Detail = "A desk earns off its three parts every second. Better parts, more cash",
 		Check = function(Data: any): boolean
 			return AnyDesk(Data, HasBetterPart)
+		end,
+	},
+	{
+		Name = "Upgrades",
+		Text = "Open Upgrades and get a second roll pad",
+		Detail = "This one is free. Every pad is one more part on every roll",
+		Check = function(Data: any): boolean
+			return next(Data.Upgrades.Owned()) ~= nil
 		end,
 	},
 	{
@@ -146,34 +154,32 @@ local Stages: { Stage } = {
 			return next(Data.Gears()) ~= nil
 		end,
 	},
-	{
-		Name = "Upgrades",
-		Text = "Open Upgrades and buy your first one",
-		Detail = "Upgrades boost everything you own. This first one is free",
-		Check = function(Data: any): boolean
-			return next(Data.Upgrades.Owned()) ~= nil
-		end,
-	},
 }
 
 local Tutorial = {
 	Stages = Stages,
 	StarterVariant = StarterVariant,
 
-	--> What the first roll puts on the first pad, whatever the dice said: about one in eight, which
-	--> is enough of a step up from the starter parts for the swap to mean something.
-	FirstRollVariant = "Tree",
+	--> What the first roll puts on the first pad, whatever the dice said: a Rare, one in 32, so the
+	--> very first thing the game hands over already looks like a pull worth having.
+	FirstRollVariant = "Cloudy",
 
 	--> The gear the BuyGear step hands out for nothing, by key in Configs.Gears: the cheapest, so a
 	--> free one is not worth more than the step is teaching.
 	FreeGear = "WoodenBat",
 
-	--> A few presses of the roll button, once the tutorial is over and the player is rolling on their
-	--> own, are rolled at many times their luck: not a guaranteed anything, just a press where the
-	--> rare end of the table is close enough to touch. At 100x, about one press in six lands a
-	--> Legendary somewhere on the nine pads and about one in two an Epic. Counted by press, ever.
-	LuckyPresses = { [6] = true, [11] = true },
-	LuckyMultiplier = 100,
+	--> Presses of the roll button that are rigged a little in the player's favour, once the tutorial
+	--> is over. The first lands on the After'th press after it and is the big one; every one after
+	--> that comes round somewhere between Every[1] and Every[2] presses later and is the small one,
+	--> so there is always one coming and it never lands on a beat the player can count. Luck alone
+	--> barely moves the rare end -- even 100x is an Epic about one pad in twenty -- so each also
+	--> rolls one pad off the table cut down to Floor and rarer: the press always shows something.
+	LuckyRolls = {
+		After = 2,
+		Every = { 7, 10 },
+		Big = { Luck = 100, Floor = "Cloudy" },
+		Small = { Luck = 10, Floor = "Coral" },
+	},
 
 	--> How long after the client comes up before the first step is shown. Just long enough for the
 	--> plot to be there under the player.
